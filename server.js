@@ -271,6 +271,31 @@ app.get('/health', (req, res) => {
   });
 });
 
+
+// ========================================
+// ROUTE RACINE : PAGE D'ACCUEIL
+// ========================================
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: '🚀 Luminara Express Server is running!',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      dashboard: '/api/dashboard/analytics',
+      notifications: '/api/send-notification',
+      chat: '/api/send-chat-message',
+      analytics: {
+        visitor: '/api/analytics/visitor',
+        chat: '/api/analytics/chat',
+        conversion: '/api/analytics/conversion'
+      }
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+
 // ========================================
 // START SERVER
 // ========================================
