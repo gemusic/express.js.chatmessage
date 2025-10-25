@@ -1,404 +1,353 @@
 // ========================================
-// LUMINARA TRACKING SCRIPT V3
-// DYNAMIC PRODUCT DETECTION
-// ========================================
-
-(function() {
-  'use strict';
-
-  // ========================================
-  // CONFIGURATION
-  // ========================================
-
-  const WEBHOOK_URL = 'https://public.lindy.ai/api/v1/webhooks/lindy/7acf721d-ccf0-4ae2-8327-ad991d9488a5';
-  const WEBHOOK_TOKEN = 'fd17e82e6fe51ea0a6d1043ec2ad9425adfd358f9628227207a6a0eea9a951e3';
-  const TRANSMISSION_INTERVAL = 30000; // 30 seconds
-
-  // ========================================
-  // VISITOR ID MANAGEMENT
-  // ========================================
-
-  function getOrCreateVisitorId() {
-    let visitorId = localStorage.getItem('luminara_visitor_id');
-    if (!visitorId) {
-      visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('luminara_visitor_id', visitorId);
-    }
-    return visitorId;
-  }
-
-  const visitorId = getOrCreateVisitorId();
-
-  // ========================================
-  // DATA STORAGE
-  // ========================================
-
-  const trackingData = {
-    visitor_id: visitorId,
-    page_url: window.location.href,
-    page_title: document.title,
-    referrer: document.referrer || 'direct',
-    session_start: new Date().toISOString(),
-    time_on_page: 0,
-    scroll_depth: 0,
-    max_scroll_depth: 0,
-    mouse_movements: [],
-    clicks: 0,
-    form_interactions: 0,
-    product_views: {},
-    cart_actions: [],
-    device_info: {
-      user_agent: navigator.userAgent,
-      screen_width: window.screen.width,
-      screen_height: window.screen.height,
-      viewport_width: window.innerWidth,
-      viewport_height: window.innerHeight,
-      device_type: getDeviceType()
-    },
-    back_button_count: 0,
-    inactivity_periods: [],
-    tab_switches: 0,
-    search_queries: [],
-    review_reading_time: 0,
-    price_filter_interactions: 0,
-    checkout_page_time: 0,
-    form_errors: 0,
-    promo_code_attempts: 0
-  };
-
-  function getDeviceType() {
-    const ua = navigator.userAgent;
-    if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
-      return 'tablet';
-    }
-    if (/Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) {
-      return 'mobile';
-    }
-    return 'desktop';
-  }
-
-  // ========================================
-  // DYNAMIC PRODUCT DETECTION
-  // ========================================
-
-  function detectProductFromElement(element) {
-    // Method 1: Check onclick attribute for addToCart
-    const onclick = element.getAttribute('onclick');
-    if (onclick && onclick.includes('addToCart')) {
-      const match = onclick.match(/addToCart\(['"]([^'"]+)['"],\s*['"]([^'"]+)['"],\s*(\d+)/);
-      if (match) {
-        return {
-          id: match[1],
-          name: match[2],
-          price: parseFloat(match[3])
-        };
-      }
-    }
-
-    // Method 2: Find product card structure
-    const productCard = element.closest('.product-card') || element.closest('[class*="product"]');
-    if (productCard) {
-      const nameElement = productCard.querySelector('h3') || productCard.querySelector('[class*="name"]');
-      const priceElement = productCard.querySelector('.price') || productCard.querySelector('[class*="price"]');
-      
-      if (nameElement && priceElement) {
-        const name = nameElement.textContent.trim();
-        const priceText = priceElement.textContent.trim();
-        const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
-        
-        return {
-          id: 'prod_' + name.toLowerCase().replace(/\s+/g, '_'),
-          name: name,
-          price: price
-        };
-      }
-    }
-
-    // Method 3: Check global products array
-    if (window.products && Array.isArray(window.products)) {
-      const productName = element.textContent.trim();
-      const product = window.products.find(p => p.name === productName);
-      if (product) {
-        return {
-          id: product.id || 'prod_' + product.name.toLowerCase().replace(/\s+/g, '_'),
-          name: product.name,
-          price: product.price
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // ========================================
-  // PRODUCT VIEW TRACKING
-  // ========================================
-
-  function trackProductView(productId, productName, price) {
-    if (!trackingData.product_views[productId]) {
-      trackingData.product_views[productId] = {
-        product_name: productName,
-        price: price,
-        hover_time: 0,
-        view_count: 0
-      };
-    }
-    trackingData.product_views[productId].view_count++;
-  }
-
-  // ========================================
-  // CART ACTION TRACKING
-  // ========================================
-
-  function trackCartAction(action, productId, productName, price) {
-    trackingData.cart_actions.push({
-      action: action,
-      product_id: productId,
-      product_name: productName,
-      price: price,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // ========================================
-  // EVENT LISTENERS
-  // ========================================
-
-  // Time on page
-  let startTime = Date.now();
-  setInterval(() => {
-    trackingData.time_on_page = Math.floor((Date.now() - startTime) / 1000);
-  }, 1000);
-
-  // Scroll tracking
-  let lastScrollTime = Date.now();
-  window.addEventListener('scroll', debounce(() => {
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-    const scrollPercent = Math.round((scrollTop / scrollHeight) * 100);
-    
-    trackingData.scroll_depth = scrollPercent;
-    trackingData.max_scroll_depth = Math.max(trackingData.max_scroll_depth, scrollPercent);
-    
-    lastScrollTime = Date.now();
-  }, 100));
-
-  // Mouse movement tracking (sampled)
-  let mouseMoveCount = 0;
-  window.addEventListener('mousemove', (e) => {
-    mouseMoveCount++;
-    if (mouseMoveCount % 10 === 0) { // Sample every 10th movement
-      if (trackingData.mouse_movements.length < 50) { // Limit storage
-        trackingData.mouse_movements.push({
-          x: e.clientX,
-          y: e.clientY,
-          timestamp: Date.now()
-        });
-      }
-    }
-  });
-
-  // Click tracking with dynamic product detection
-  window.addEventListener('click', (e) => {
-    trackingData.clicks++;
-    
-    // Detect product from clicked element
-    const product = detectProductFromElement(e.target);
-    if (product) {
-      trackProductView(product.id, product.name, product.price);
-      
-      // Check if it's an "Add to Cart" action
-      const onclick = e.target.getAttribute('onclick');
-      if (onclick && onclick.includes('addToCart')) {
-        trackCartAction('add_to_cart', product.id, product.name, product.price);
-      }
-    }
-  });
-
-  // Form interaction tracking
-  document.addEventListener('focusin', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-      trackingData.form_interactions++;
-    }
-  });
-
-  // Back button detection
-  window.addEventListener('popstate', () => {
-    trackingData.back_button_count++;
-  });
-
-  // Tab visibility tracking
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      trackingData.tab_switches++;
-    }
-  });
-
-  // Inactivity tracking
-  let inactivityTimer;
-  let inactivityStart = Date.now();
-  
-  function resetInactivityTimer() {
-    if (inactivityTimer) {
-      const inactivityDuration = Date.now() - inactivityStart;
-      if (inactivityDuration > 5000) { // More than 5 seconds
-        trackingData.inactivity_periods.push({
-          duration: Math.floor(inactivityDuration / 1000),
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-    clearTimeout(inactivityTimer);
-    inactivityStart = Date.now();
-    inactivityTimer = setTimeout(() => {}, 5000);
-  }
-  
-  ['mousemove', 'keydown', 'scroll', 'click'].forEach(event => {
-    window.addEventListener(event, resetInactivityTimer);
-  });
-
-  // Review section detection
-  const reviewObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const reviewStartTime = Date.now();
-        const stopObserving = () => {
-          trackingData.review_reading_time += Math.floor((Date.now() - reviewStartTime) / 1000);
-          reviewObserver.unobserve(entry.target);
-        };
-        setTimeout(stopObserving, 3000);
-      }
-    });
-  });
-
-  // Observe review sections
-  document.querySelectorAll('[class*="review"], [id*="review"]').forEach(el => {
-    reviewObserver.observe(el);
-  });
-
-  // Price filter tracking
-  document.addEventListener('change', (e) => {
-    if (e.target.type === 'range' || e.target.name?.includes('price')) {
-      trackingData.price_filter_interactions++;
-    }
-  });
-
-  // Checkout page detection
-  if (window.location.href.includes('checkout') || window.location.href.includes('cart')) {
-    const checkoutStartTime = Date.now();
-    setInterval(() => {
-      trackingData.checkout_page_time = Math.floor((Date.now() - checkoutStartTime) / 1000);
-    }, 1000);
-  }
-
-  // Form error detection
-  document.addEventListener('invalid', () => {
-    trackingData.form_errors++;
-  }, true);
-
-  // Promo code detection
-  document.addEventListener('input', (e) => {
-    if (e.target.name?.includes('promo') || e.target.name?.includes('coupon')) {
-      trackingData.promo_code_attempts++;
-    }
-  });
-
-  // ========================================
-  // PRODUCT HOVER TIME TRACKING
-  // ========================================
-
-  let hoverTimers = {};
-
-  document.addEventListener('mouseover', (e) => {
-    const product = detectProductFromElement(e.target);
-    if (product && !hoverTimers[product.id]) {
-      hoverTimers[product.id] = Date.now();
-    }
-  });
-
-  document.addEventListener('mouseout', (e) => {
-    const product = detectProductFromElement(e.target);
-    if (product && hoverTimers[product.id]) {
-      const hoverDuration = Date.now() - hoverTimers[product.id];
-      if (!trackingData.product_views[product.id]) {
-        trackingData.product_views[product.id] = {
-          product_name: product.name,
-          price: product.price,
-          hover_time: 0,
-          view_count: 0
-        };
-      }
-      trackingData.product_views[product.id].hover_time += Math.floor(hoverDuration / 1000);
-      delete hoverTimers[product.id];
-    }
-  });
-
-  // ========================================
-  // DATA TRANSMISSION
-  // ========================================
-
-  function sendDataToWebhook() {
-    const payload = {
-      ...trackingData,
-      sent_at: new Date().toISOString()
-    };
-
-    fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${WEBHOOK_TOKEN}`
-      },
-      body: JSON.stringify(payload)
-    })
-    .then(response => {
-      if (response.ok) {
-        console.log('✅ Luminara tracking data sent successfully');
-      } else {
-        console.error('❌ Failed to send tracking data:', response.status);
-      }
-    })
-    .catch(error => {
-      console.error('❌ Error sending tracking data:', error);
-    });
-  }
-
-  // Send data every 30 seconds
-  setInterval(sendDataToWebhook, TRANSMISSION_INTERVAL);
-
-  // Send data before page unload
-  window.addEventListener('beforeunload', () => {
-    sendDataToWebhook();
-  });
-
-  // ========================================
-  // PUBLIC API
-  // ========================================
-
-  window.LuminaraTracker = {
-    trackProductView: trackProductView,
-    trackCartAction: trackCartAction,
-    trackPromoCode: () => trackingData.promo_code_attempts++,
-    getData: () => trackingData
-  };
-
-  // ========================================
-  // UTILITY FUNCTIONS
-  // ========================================
-
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
-
-  console.log('🚀 Luminara Tracking V3 initialized for visitor:', visitorId);
-
-})();
-
+‎// LUMINARA BEHAVIORAL TRACKING V4
+‎// WITH 30-SECOND DATA ACCUMULATION
+‎// ========================================
+‎
+‎(function() {
+‎  'use strict';
+‎
+‎  // ========================================
+‎  // CONFIGURATION
+‎  // ========================================
+‎
+‎  const CONFIG = {
+‎    WEBHOOK_URL: 'https://hook.us2.make.com/YOUR_WEBHOOK_ID',
+‎    ACCUMULATION_TIME: 30000, // 30 seconds
+‎    VISITOR_ID_KEY: 'luminara_visitor_id'
+‎  };
+‎
+‎  // ========================================
+‎  // DATA ACCUMULATOR
+‎  // ========================================
+‎
+‎  const dataAccumulator = {
+‎    visitor_id: null,
+‎    page_url: window.location.href,
+‎    start_time: Date.now(),
+‎    
+‎    // Behavioral metrics
+‎    scroll_events: [],
+‎    click_events: [],
+‎    hover_events: [],
+‎    mouse_movements: [],
+‎    
+‎    // Product interactions
+‎    product_views: [],
+‎    product_hovers: [],
+‎    
+‎    // Engagement metrics
+‎    time_on_page: 0,
+‎    scroll_depth: 0,
+‎    max_scroll_depth: 0,
+‎    
+‎    // Decision signals
+‎    back_button_clicks: 0,
+‎    tab_switches: 0,
+‎    inactivity_periods: [],
+‎    
+‎    // Cart & checkout
+‎    cart_actions: 0,
+‎    checkout_page_time: 0,
+‎    abandoned_cart_attempts: 0,
+‎    
+‎    // Form interactions
+‎    form_errors: 0,
+‎    payment_issues: 0,
+‎    
+‎    // Comparison behavior
+‎    products_compared: 0,
+‎    price_filter_interactions: 0,
+‎    
+‎    // Trust signals
+‎    reads_reviews: false,
+‎    seeks_discounts: false,
+‎    tries_promo_codes: false
+‎  };
+‎
+‎  // ========================================
+‎  // VISITOR ID MANAGEMENT
+‎  // ========================================
+‎
+‎  function getOrCreateVisitorId() {
+‎    let visitorId = localStorage.getItem(CONFIG.VISITOR_ID_KEY);
+‎    
+‎    if (!visitorId) {
+‎      visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+‎      localStorage.setItem(CONFIG.VISITOR_ID_KEY, visitorId);
+‎    }
+‎    
+‎    return visitorId;
+‎  }
+‎
+‎  dataAccumulator.visitor_id = getOrCreateVisitorId();
+‎
+‎  // ========================================
+‎  // EVENT LISTENERS
+‎  // ========================================
+‎
+‎  // Scroll tracking
+‎  let lastScrollTime = Date.now();
+‎  window.addEventListener('scroll', function() {
+‎    const scrollDepth = Math.round((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100);
+‎    
+‎    dataAccumulator.scroll_events.push({
+‎      depth: scrollDepth,
+‎      timestamp: Date.now()
+‎    });
+‎    
+‎    dataAccumulator.scroll_depth = scrollDepth;
+‎    dataAccumulator.max_scroll_depth = Math.max(dataAccumulator.max_scroll_depth, scrollDepth);
+‎    
+‎    lastScrollTime = Date.now();
+‎  });
+‎
+‎  // Click tracking
+‎  document.addEventListener('click', function(e) {
+‎    const clickData = {
+‎      element: e.target.tagName,
+‎      class: e.target.className,
+‎      id: e.target.id,
+‎      text: e.target.innerText ? e.target.innerText.substring(0, 50) : '',
+‎      timestamp: Date.now()
+‎    };
+‎    
+‎    dataAccumulator.click_events.push(clickData);
+‎    
+‎    // Detect specific actions
+‎    if (e.target.closest('[data-product-id]')) {
+‎      const productId = e.target.closest('[data-product-id]').getAttribute('data-product-id');
+‎      dataAccumulator.product_views.push(productId);
+‎    }
+‎    
+‎    if (e.target.closest('.add-to-cart, [data-action="add-to-cart"]')) {
+‎      dataAccumulator.cart_actions++;
+‎    }
+‎    
+‎    if (e.target.closest('.back-button, [data-action="back"]')) {
+‎      dataAccumulator.back_button_clicks++;
+‎    }
+‎    
+‎    if (e.target.closest('.review, [data-section="reviews"]')) {
+‎      dataAccumulator.reads_reviews = true;
+‎    }
+‎    
+‎    if (e.target.closest('.discount, .promo, [data-action="apply-promo"]')) {
+‎      dataAccumulator.seeks_discounts = true;
+‎    }
+‎  });
+‎
+‎  // Hover tracking
+‎  let hoverTimeout;
+‎  document.addEventListener('mouseover', function(e) {
+‎    const hoverStart = Date.now();
+‎    
+‎    hoverTimeout = setTimeout(function() {
+‎      const hoverDuration = Date.now() - hoverStart;
+‎      
+‎      dataAccumulator.hover_events.push({
+‎        element: e.target.tagName,
+‎        class: e.target.className,
+‎        duration: hoverDuration,
+‎        timestamp: Date.now()
+‎      });
+‎      
+‎      // Product hover detection
+‎      if (e.target.closest('[data-product-id]')) {
+‎        const productId = e.target.closest('[data-product-id]').getAttribute('data-product-id');
+‎        dataAccumulator.product_hovers.push({
+‎          product_id: productId,
+‎          duration: hoverDuration
+‎        });
+‎      }
+‎    }, 500); // 500ms hover threshold
+‎  });
+‎
+‎  document.addEventListener('mouseout', function() {
+‎    clearTimeout(hoverTimeout);
+‎  });
+‎
+‎  // Mouse movement tracking (sampled)
+‎  let mouseMoveCount = 0;
+‎  document.addEventListener('mousemove', function(e) {
+‎    mouseMoveCount++;
+‎    
+‎    // Sample every 10th movement to avoid overload
+‎    if (mouseMoveCount % 10 === 0) {
+‎      dataAccumulator.mouse_movements.push({
+‎        x: e.clientX,
+‎        y: e.clientY,
+‎        timestamp: Date.now()
+‎      });
+‎    }
+‎  });
+‎
+‎  // Inactivity detection
+‎  let inactivityTimer;
+‎  let lastActivityTime = Date.now();
+‎  
+‎  function resetInactivityTimer() {
+‎    clearTimeout(inactivityTimer);
+‎    
+‎    const inactivityDuration = Date.now() - lastActivityTime;
+‎    if (inactivityDuration > 5000) { // 5 seconds of inactivity
+‎      dataAccumulator.inactivity_periods.push({
+‎        duration: inactivityDuration,
+‎        timestamp: Date.now()
+‎      });
+‎    }
+‎    
+‎    lastActivityTime = Date.now();
+‎    
+‎    inactivityTimer = setTimeout(function() {
+‎      // User inactive for 10 seconds
+‎    }, 10000);
+‎  }
+‎
+‎  ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(function(event) {
+‎    document.addEventListener(event, resetInactivityTimer);
+‎  });
+‎
+‎  // Tab visibility tracking
+‎  document.addEventListener('visibilitychange', function() {
+‎    if (document.hidden) {
+‎      dataAccumulator.tab_switches++;
+‎    }
+‎  });
+‎
+‎  // Form error tracking
+‎  document.addEventListener('invalid', function() {
+‎    dataAccumulator.form_errors++;
+‎  }, true);
+‎
+‎  // ========================================
+‎  // DATA ANALYSIS & TRANSMISSION
+‎  // ========================================
+‎
+‎  function analyzeAndSendData() {
+‎    // Calculate time on page
+‎    dataAccumulator.time_on_page = Math.round((Date.now() - dataAccumulator.start_time) / 1000);
+‎    
+‎    // Calculate engagement metrics
+‎    const totalClicks = dataAccumulator.click_events.length;
+‎    const totalScrolls = dataAccumulator.scroll_events.length;
+‎    const totalHovers = dataAccumulator.hover_events.length;
+‎    
+‎    // Calculate scroll speed
+‎    const scrollSpeed = totalScrolls > 0 ? 
+‎      (dataAccumulator.max_scroll_depth / dataAccumulator.time_on_page) : 0;
+‎    
+‎    // Calculate average hover time
+‎    const avgHoverTime = totalHovers > 0 ?
+‎      dataAccumulator.hover_events.reduce((sum, h) => sum + h.duration, 0) / totalHovers : 0;
+‎    
+‎    // Calculate inactivity score
+‎    const totalInactivityTime = dataAccumulator.inactivity_periods.reduce((sum, p) => sum + p.duration, 0);
+‎    const inactivityScore = dataAccumulator.time_on_page > 0 ?
+‎      (totalInactivityTime / (dataAccumulator.time_on_page * 1000)) * 100 : 0;
+‎    
+‎    // Prepare final payload
+‎    const payload = {
+‎      // Identity
+‎      visitor_id: dataAccumulator.visitor_id,
+‎      page_url: dataAccumulator.page_url,
+‎      timestamp: new Date().toISOString(),
+‎      
+‎      // Time metrics
+‎      time_on_page: dataAccumulator.time_on_page,
+‎      
+‎      // Engagement metrics
+‎      total_clicks: totalClicks,
+‎      total_scrolls: totalScrolls,
+‎      total_hovers: totalHovers,
+‎      scroll_depth: dataAccumulator.scroll_depth,
+‎      max_scroll_depth: dataAccumulator.max_scroll_depth,
+‎      scroll_speed: Math.round(scrollSpeed * 100) / 100,
+‎      avg_hover_time: Math.round(avgHoverTime),
+‎      
+‎      // Product interactions
+‎      product_views: [...new Set(dataAccumulator.product_views)], // Unique products
+‎      product_hovers: dataAccumulator.product_hovers,
+‎      products_compared: dataAccumulator.products_compared,
+‎      
+‎      // Decision signals
+‎      back_button_clicks: dataAccumulator.back_button_clicks,
+‎      tab_switches: dataAccumulator.tab_switches,
+‎      inactivity_score: Math.round(inactivityScore),
+‎      inactivity_periods: dataAccumulator.inactivity_periods.length,
+‎      
+‎      // Cart & checkout
+‎      cart_actions: dataAccumulator.cart_actions,
+‎      checkout_page_time: dataAccumulator.checkout_page_time,
+‎      abandoned_cart_attempts: dataAccumulator.abandoned_cart_attempts,
+‎      
+‎      // Form & payment
+‎      form_errors: dataAccumulator.form_errors,
+‎      payment_issues: dataAccumulator.payment_issues,
+‎      
+‎      // Trust signals
+‎      reads_reviews: dataAccumulator.reads_reviews,
+‎      seeks_discounts: dataAccumulator.seeks_discounts,
+‎      tries_promo_codes: dataAccumulator.tries_promo_codes,
+‎      
+‎      // Comparison behavior
+‎      price_filter_interactions: dataAccumulator.price_filter_interactions,
+‎      
+‎      // Raw events (for advanced analysis)
+‎      click_events: dataAccumulator.click_events,
+‎      scroll_events: dataAccumulator.scroll_events,
+‎      hover_events: dataAccumulator.hover_events
+‎    };
+‎    
+‎    // Send to webhook
+‎    fetch(CONFIG.WEBHOOK_URL, {
+‎      method: 'POST',
+‎      headers: {
+‎        'Content-Type': 'application/json'
+‎      },
+‎      body: JSON.stringify(payload)
+‎    })
+‎    .then(response => {
+‎      if (response.ok) {
+‎        console.log('✅ Luminara: 30-second behavioral data sent successfully');
+‎      } else {
+‎        console.error('❌ Luminara: Failed to send data');
+‎      }
+‎    })
+‎    .catch(error => {
+‎      console.error('❌ Luminara: Error sending data:', error);
+‎    });
+‎  }
+‎
+‎  // ========================================
+‎  // START ACCUMULATION TIMER
+‎  // ========================================
+‎
+‎  setTimeout(function() {
+‎    analyzeAndSendData();
+‎    console.log('🎯 Luminara: 30-second analysis complete and sent');
+‎  }, CONFIG.ACCUMULATION_TIME);
+‎
+‎  // ========================================
+‎  // PUBLIC API
+‎  // ========================================
+‎
+‎  window.LuminaraTracking = {
+‎    getVisitorId: function() {
+‎      return dataAccumulator.visitor_id;
+‎    },
+‎    
+‎    getCurrentData: function() {
+‎      return dataAccumulator;
+‎    },
+‎    
+‎    forceAnalysis: function() {
+‎      analyzeAndSendData();
+‎    }
+‎  };
+‎
+‎  console.log('🚀 Luminara Tracking V4 initialized (30-second accumulation mode)');
+‎  console.log('👤 Visitor ID:', dataAccumulator.visitor_id);
+‎
+‎})();
+‎
+‎
