@@ -1,55 +1,38 @@
-# Luminara Express Server
+# 🚀 Luminara Express Server - Version Optimisée
 
-Serveur Express.js pour l'agent de vente IA Luminara.
+Serveur Express.js optimisé pour l'agent de vente IA Luminara avec intégration Lindy AI.
 
-## Installation
+## 🎯 NOUVEAUX ENDPOINTS PRINCIPAUX
+
+### **Données Comportementales**
+- `POST /api/behavioral-data` - Reçoit les données de tracking complet
+
+### **Chat & Messages**
+- `POST /api/send-chat-message` - Messages de l'AI vers le visiteur
+- `POST /api/visitor-message` - Messages du visiteur vers l'AI  
+- `GET /api/chat-response/:visitor_id` - Récupère les réponses AI
+- `GET /api/conversation/:visitor_id` - Historique des conversations
+
+### **Analytics**
+- `POST /api/analytics/conversion` - Suivi des conversions
+- `POST /api/analytics/product-update` - Synchronisation produits
+- `POST /api/analytics/visitor` - Analytics visiteurs
+- `POST /api/analytics/chat` - Analytics conversations
+
+### **Debug & Monitoring**
+- `GET /api/visitor-data/:visitor_id` - Données débug visiteur
+- `GET /health` - Statut du serveur
+
+## 🔗 INTÉGRATION LINDY AI
+
+Le serveur forward automatiquement vers:
+- **Behavioral Analysis**: `0de777e3-9723-48c7-9fd4-6456774e4428`
+- **Chat Messages**: `1a292d2a-eeb9-48a2-a4a5-00d5596253ee`
+- **Conversions**: `99829fec-a3bf-427b-84ac-deef7cfdfa6b`
+- **Product Sync**: `4b27b7a5-6690-4fcc-a81d-a23780ef27fe`
+
+## 🛠️ INSTALLATION
 
 ```bash
-
 npm install
-
-Démarrage
-
-
 npm start
-
-Routes API
-
-POST /api/send-notification - Reçoit les notifications depuis Lindy
-
-POST /api/send-chat-message - Reçoit les messages chat depuis Lindy
-
-GET /api/get-chat-messages?visitor_id=XXX - Récupère les messages pour le chatbot
-
-POST /api/analytics/visitor - Log analytics visiteur
-
-POST /api/analytics/chat - Log analytics chat
-
-POST /api/analytics/conversion - Log conversions
-
-POST /api/analytics/product-update - Log mises à jour produits
-
-GET /api/dashboard/analytics - Récupère toutes les analytics pour le dashboard
-
-GET /api/dashboard/visitors/realtime - Récupère les visiteurs en temps réel
-
-GET /health - Health check
-
-Déploiement sur Render
-
-Push ce repo sur GitHub
-
-Connecte ton repo à Render.com
-
-Configure :
-
-Build Command: npm install
-
-Start Command: npm start
-
-Deploy !
-
-
-
----
-
