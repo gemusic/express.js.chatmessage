@@ -1,3 +1,5 @@
+
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -10,27 +12,29 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================
-// STORAGE (In-Memory - Replace with Database in Production)
+// STORAGE (In-Memory)
 // ============================================
 
-// Store notifications per visitor
 const notifications = {};
-
-// Store chat responses per visitor
 const chatResponses = {};
-
-// Store conversation history per visitor
 const conversationHistory = {};
 
 // ============================================
-// LINDY AI WEBHOOK ENDPOINTS
+// LINDY AI WEBHOOK ENDPOINTS (CORRECTED)
 // ============================================
 
 const LINDY_WEBHOOKS = {
-  BEHAVIORAL_ANALYSIS: 'https://webhook.lindy.ai/webhook/7acf721d-ccf0-4ae2-8327-ad991d9488a5',
-  CHAT_MESSAGE: 'https://webhook.lindy.ai/webhook/44632419-b9cb-4f41-b3aa-3af1e4c1ebac',
-  CONVERSION: 'https://webhook.lindy.ai/webhook/ca1b6566-66a2-4aa2-a0db-4ab70704fa2c',
-  PRODUCT_SYNC: 'https://webhook.lindy.ai/webhook/e54f9924-989f-42b1-9c19-816e7594cbaf'
+  BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/7acf721d-ccf0-4ae2-8327-ad991d9488a5',
+  CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/44632419-b9cb-4f41-b3aa-3af1e4c1ebac',
+  CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/ca1b6566-66a2-4aa2-a0db-4ab70704fa2c',
+  PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/e54f9924-989f-42b1-9c19-816e7594cbaf'
+};
+
+const WEBHOOK_TOKENS = {
+  BEHAVIORAL_ANALYSIS: 'fd17e82e6fe51ea0a6d1043ec2ad9425adfd358f9628227207a6a0eea9a951e3',
+  CHAT_MESSAGE: '27e496453b0e20b07725145876e696c91be4ac9beb6d359ab70e449a7e110a30',
+  CONVERSION: 'cd6cc7a7ec3ab1358e0013f31cca0ffba2b94390e89534acb76d622812b0acb6',
+  PRODUCT_SYNC: 'db44f3ca53a1292184c2af5d87ec87b6ce32c4993b5f84d5a25ff763919c9490'
 };
 
 // ============================================
@@ -41,12 +45,21 @@ app.post('/api/analyze-behavior', async (req, res) => {
   try {
     const behavioralData = req.body;
     
-    console.log('📊 Received behavioral data:', behavioralData);
+    console.log(' Received behavioral data:', behavioralData);
 
-    // Forward to Lindy AI for 4-AI analysis
-    const lindyResponse = await axios.post(LINDY_WEBHOOKS.BEHAVIORAL_ANALYSIS, behavioralData);
+    // Forward to Lindy AI with authentication
+    const lindyResponse = await axios.post(
+      LINDY_WEBHOOKS.BEHAVIORAL_ANALYSIS,
+      behavioralData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${WEBHOOK_TOKENS.BEHAVIORAL_ANALYSIS}`
+        }
+      }
+    );
 
-    console.log('✅ Sent to Lindy AI for analysis');
+    console.log(' Sent to Lindy AI for analysis');
 
     res.json({
       success: true,
@@ -54,7 +67,7 @@ app.post('/api/analyze-behavior', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error analyzing behavior:', error.message);
+    console.error(' Error analyzing behavior:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -70,9 +83,8 @@ app.post('/api/send-notification', (req, res) => {
   try {
     const { visitor_id, message } = req.body;
 
-    console.log(`📬 Notification for ${visitor_id}:`, message);
+    console.log(` Notification for ${visitor_id}:`, message);
 
-    // Store notification for this visitor
     notifications[visitor_id] = {
       message: message,
       timestamp: new Date().toISOString(),
@@ -85,7 +97,7 @@ app.post('/api/send-notification', (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error storing notification:', error.message);
+    console.error(' Error storing notification:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -103,10 +115,9 @@ app.get('/api/notifications/:visitor_id', (req, res) => {
   if (notifications[visitor_id] && !notifications[visitor_id].read) {
     const notification = notifications[visitor_id];
     
-    // Mark as read
     notifications[visitor_id].read = true;
 
-    console.log(`✅ Notification retrieved for ${visitor_id}`);
+    console.log(` Notification retrieved for ${visitor_id}`);
 
     res.json({
       success: true,
@@ -128,7 +139,7 @@ app.post('/api/chat', async (req, res) => {
   try {
     const { visitor_id, message } = req.body;
 
-    console.log(`💬 Chat message from ${visitor_id}:`, message);
+    console.log(` Chat message from ${visitor_id}:`, message);
 
     // Save user message to conversation history
     if (!conversationHistory[visitor_id]) {
@@ -141,13 +152,22 @@ app.post('/api/chat', async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-    // Forward to Lindy AI
-    const lindyResponse = await axios.post(LINDY_WEBHOOKS.CHAT_MESSAGE, {
-      visitor_id: visitor_id,
-      message: message
-    });
+    // Forward to Lindy AI with authentication
+    const lindyResponse = await axios.post(
+      LINDY_WEBHOOKS.CHAT_MESSAGE,
+      {
+        visitor_id: visitor_id,
+        message: message
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${WEBHOOK_TOKENS.CHAT_MESSAGE}`
+        }
+      }
+    );
 
-    console.log('✅ Chat message sent to Lindy AI');
+    console.log(' Chat message sent to Lindy AI');
 
     res.json({
       success: true,
@@ -155,7 +175,7 @@ app.post('/api/chat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error sending chat message:', error.message);
+    console.error(' Error sending chat message:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -171,16 +191,14 @@ app.post('/api/send-chat-message', (req, res) => {
   try {
     const { visitor_id, message } = req.body;
 
-    console.log(`🤖 AI response for ${visitor_id}:`, message);
+    console.log(` AI response for ${visitor_id}:`, message);
 
-    // Store AI response for this visitor
     chatResponses[visitor_id] = {
       message: message,
       timestamp: new Date().toISOString(),
       read: false
     };
 
-    // Save assistant message to conversation history
     if (!conversationHistory[visitor_id]) {
       conversationHistory[visitor_id] = [];
     }
@@ -197,7 +215,7 @@ app.post('/api/send-chat-message', (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error storing AI response:', error.message);
+    console.error(' Error storing AI response:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -215,10 +233,9 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
   if (chatResponses[visitor_id] && !chatResponses[visitor_id].read) {
     const response = chatResponses[visitor_id];
     
-    // Mark as read
     chatResponses[visitor_id].read = true;
 
-    console.log(`✅ AI response retrieved for ${visitor_id}`);
+    console.log(` AI response retrieved for ${visitor_id}`);
 
     res.json({
       success: true,
@@ -264,12 +281,12 @@ app.post('/api/conversation/save', (req, res) => {
   }
   
   conversationHistory[visitor_id].push({
-    role: role, // 'user' or 'assistant'
+    role: role,
     message: message,
     timestamp: new Date().toISOString()
   });
   
-  console.log(`💾 Saved ${role} message for ${visitor_id}:`, message);
+  console.log(` Saved ${role} message for ${visitor_id}:`, message);
   
   res.json({
     success: true,
@@ -285,10 +302,18 @@ app.post('/api/analytics/conversion', async (req, res) => {
   try {
     const conversionData = req.body;
     
-    console.log('💰 Conversion tracked:', conversionData);
+    console.log(' Conversion tracked:', conversionData);
 
-    // Forward to Lindy AI
-    await axios.post(LINDY_WEBHOOKS.CONVERSION, conversionData);
+    await axios.post(
+      LINDY_WEBHOOKS.CONVERSION,
+      conversionData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${WEBHOOK_TOKENS.CONVERSION}`
+        }
+      }
+    );
 
     res.json({
       success: true,
@@ -296,7 +321,7 @@ app.post('/api/analytics/conversion', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error tracking conversion:', error.message);
+    console.error(' Error tracking conversion:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -312,10 +337,18 @@ app.post('/api/analytics/product-update', async (req, res) => {
   try {
     const productData = req.body;
     
-    console.log('📦 Product update:', productData);
+    console.log(' Product update:', productData);
 
-    // Forward to Lindy AI
-    await axios.post(LINDY_WEBHOOKS.PRODUCT_SYNC, productData);
+    await axios.post(
+      LINDY_WEBHOOKS.PRODUCT_SYNC,
+      productData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${WEBHOOK_TOKENS.PRODUCT_SYNC}`
+        }
+      }
+    );
 
     res.json({
       success: true,
@@ -323,7 +356,7 @@ app.post('/api/analytics/product-update', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error syncing product:', error.message);
+    console.error(' Error syncing product:', error.message);
     res.status(500).json({
       success: false,
       error: error.message
@@ -332,16 +365,16 @@ app.post('/api/analytics/product-update', async (req, res) => {
 });
 
 // ============================================
-// 11. ANALYTICS ENDPOINTS (OPTIONAL)
+// 11. ANALYTICS ENDPOINTS
 // ============================================
 
 app.post('/api/analytics/visitor', (req, res) => {
-  console.log('📊 Visitor analytics:', req.body);
+  console.log(' Visitor analytics:', req.body);
   res.json({ success: true });
 });
 
 app.post('/api/analytics/chat', (req, res) => {
-  console.log('💬 Chat analytics:', req.body);
+  console.log(' Chat analytics:', req.body);
   res.json({ success: true });
 });
 
@@ -362,7 +395,7 @@ app.get('/health', (req, res) => {
 // ============================================
 
 app.listen(PORT, () => {
-  console.log(`🚀 Luminara Express Server running on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(` Luminara Express Server running on port ${PORT}`);
+  console.log(` Health check: http://localhost:${PORT}/health`);
 });
 
