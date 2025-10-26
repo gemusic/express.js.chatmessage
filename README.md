@@ -1,8 +1,24 @@
-# 🚀 Luminara Express Server - Version Optimisée
+# 🚀 Luminara Express Server - Version avec Déduplication
 
-Serveur Express.js optimisé pour l'agent de vente IA Luminara avec intégration Lindy AI.
+Serveur Express.js optimisé pour l'agent de vente IA Luminara avec intégration Lindy AI et système de déduplication.
 
-## 🎯 NOUVEAUX ENDPOINTS PRINCIPAUX
+## 🆕 NOUVELLES FONCTIONNALITÉS
+
+### **Système de Déduplication**
+- `GET /api/deduplication/check?visitor_id={visitor_id}` - Vérifie si un visiteur a déjà été traité
+- `POST /api/deduplication/mark` - Marque un visiteur comme traité
+
+### **Nouveaux Webhooks Lindy**
+- **Behavioral Analysis**: `a77d3f14-2ae7-4dd6-9862-16a0bcbc182b`
+- **Chat Messages**: `b37b9919-cd88-44d0-8d7c-a6b9c1f2975a` 
+- **Conversions**: `a52e8822-76f6-4775-bab2-c523d49568b5`
+- **Product Sync**: `fa1b7f8e-7d6b-4740-9e26-e9180ffe303d`
+
+## 🎯 ENDPOINTS PRINCIPAUX
+
+### **Déduplication**
+- `GET /api/deduplication/check?visitor_id={visitor_id}`
+- `POST /api/deduplication/mark`
 
 ### **Données Comportementales**
 - `POST /api/behavioral-data` - Reçoit les données de tracking complet
@@ -25,11 +41,11 @@ Serveur Express.js optimisé pour l'agent de vente IA Luminara avec intégration
 
 ## 🔗 INTÉGRATION LINDY AI
 
-Le serveur forward automatiquement vers:
-- **Behavioral Analysis**: `0de777e3-9723-48c7-9fd4-6456774e4428`
-- **Chat Messages**: `1a292d2a-eeb9-48a2-a4a5-00d5596253ee`
-- **Conversions**: `99829fec-a3bf-427b-84ac-deef7cfdfa6b`
-- **Product Sync**: `4b27b7a5-6690-4fcc-a81d-a23780ef27fe`
+Le serveur forward automatiquement vers les NOUVEAUX webhooks:
+- **Behavioral Analysis**: `a77d3f14-2ae7-4dd6-9862-16a0bcbc182b`
+- **Chat Messages**: `b37b9919-cd88-44d0-8d7c-a6b9c1f2975a`
+- **Conversions**: `a52e8822-76f6-4775-bab2-c523d49568b5`
+- **Product Sync**: `fa1b7f8e-7d6b-4740-9e26-e9180ffe303d`
 
 ## 🛠️ INSTALLATION
 
