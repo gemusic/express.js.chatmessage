@@ -1,6 +1,6 @@
 // ============================================
 // LUMINARA EXPRESS SERVER - VERSION OPTIMISÉE
-// Parfaitement aligné avec Lindy + Tracking + Site E-commerce
+// Avec système de déduplication et nouveaux webhooks
 // ============================================
 
 const express = require('express');
@@ -18,40 +18,40 @@ app.use(cors({
     credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' })); // Augmenté pour les données de tracking
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================
-// CONFIGURATION LINDY - NOUVELLES URLs
+// NOUVELLE CONFIGURATION LINDY - WEBHOOKS MIS À JOUR
 // ============================================
 const LINDY_WEBHOOKS = {
-    BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/0de777e3-9723-48c7-9fd4-6456774e4428',
-    CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/1a292d2a-eeb9-48a2-a4a5-00d5596253ee',
-    CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/99829fec-a3bf-427b-84ac-deef7cfdfa6b',
-    PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/4b27b7a5-6690-4fcc-a81d-a23780ef27fe'
+    BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/a77d3f14-2ae7-4dd6-9862-16a0bcbc182b',
+    CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/b37b9919-cd88-44d0-8d7c-a6b9c1f2975a',
+    CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/a52e8822-76f6-4775-bab2-c523d49568b5',
+    PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/fa1b7f8e-7d6b-4740-9e26-e9180ffe303d'
 };
 
 const LINDY_WEBHOOK_TOKENS = {
-    BEHAVIORAL_ANALYSIS: '75e40c6949e8d5f5041150e501cc23e60dbbf95b4e783d436ba108cfce1bdbe8',
-    CHAT_MESSAGE: '84c8dff9662aaf0d9fc6550bc0445d831d429411b78027c589420871ff368e0c',
-    CONVERSION: '5d3591fe4f9f968615b6e234e4a2a5cd70c7fca0532bd6249c2a46d05b373086',
-    PRODUCT_SYNC: '51bb612c9456d46fdc2b11436216c73669124a43580edc7f99a62aa8d2109efa'
+    BEHAVIORAL_ANALYSIS: 'b485b30708af35cacf531464d3958c0f2e571dfba26d142a4a595a53e851acc1',
+    CHAT_MESSAGE: 'c53acc7506a4b8997e31cd6aee2303a9c69ea774ec17db389cebedf8d33d58fe',
+    CONVERSION: 'd004737d70efaaab01d8984a41a0248f89e747fa638c371f061a5847c760c0c0',
+    PRODUCT_SYNC: '5a86dedf6795e9c45e637de3fb02c3e1a3a1d813c27e919c33808a3fba2c3f12'
 };
 
 // ============================================
-// STORAGE OPTIMISÉ (Adapté à votre structure HTML)
+// STORAGE OPTIMISÉ AVEC DÉDUPLICATION
 // ============================================
 
-// Store visitor behavioral data (adapté au nouveau tracking)
+// Store visitor behavioral data
 const visitorBehaviorData = {};
 
-// Store chat responses per visitor (structure alignée avec votre chat)
+// Store chat responses per visitor
 const chatResponses = {};
 
-// Store conversation history (format cohérent avec votre site)
+// Store conversation history
 const conversationHistory = {};
 
-// Analytics storage (pour dashboard futur)
+// Analytics storage
 const analyticsData = {
     visitors: {},
     conversions: [],
@@ -59,21 +59,108 @@ const analyticsData = {
     chats: []
 };
 
+// NOUVEAU: Stockage pour la déduplication
+const processedVisitors = {};
+
 // ============================================
-// 1. ENDPOINT: RECEIVE BEHAVIORAL DATA (NOUVEAU)
+// NOUVEAUX ENDPOINTS: SYSTÈME DE DÉDUPLICATION
+// ============================================
+
+// 1. Vérifier si visitor_id déjà traité
+app.get('/api/deduplication/check', (req, res) => {
+    try {
+        const { visitor_id } = req.query;
+        
+        if (!visitor_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'visitor_id parameter is required'
+            });
+        }
+
+        const processed = !!processedVisitors[visitor_id];
+        
+        console.log(`🔍 Deduplication check for ${visitor_id}: ${processed}`);
+        
+        res.json({
+            success: true,
+            processed: processed,
+            timestamp: processed ? processedVisitors[visitor_id] : null
+        });
+
+    } catch (error) {
+        console.error('❌ Error in deduplication check:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 2. Marquer visitor_id comme traité
+app.post('/api/deduplication/mark', (req, res) => {
+    try {
+        const { visitor_id, timestamp } = req.body;
+        
+        if (!visitor_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'visitor_id is required'
+            });
+        }
+
+        const processTime = timestamp || new Date().toISOString();
+        processedVisitors[visitor_id] = processTime;
+        
+        console.log(`✅ Marked visitor as processed: ${visitor_id} at ${processTime}`);
+        
+        res.json({
+            success: true,
+            visitor_id: visitor_id,
+            timestamp: processTime,
+            message: 'Visitor marked as processed'
+        });
+
+    } catch (error) {
+        console.error('❌ Error marking visitor as processed:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================
+// ENDPOINT: RECEIVE BEHAVIORAL DATA (AVEC DÉDUPLICATION)
 // ============================================
 app.post('/api/behavioral-data', async (req, res) => {
     try {
         const behavioralData = req.body;
+        const visitorId = behavioralData.visitor_id;
         
-        console.log('📊 Received behavioral data for:', behavioralData.visitor_id);
+        console.log('📊 Received behavioral data for:', visitorId);
         
+        // VÉRIFICATION DE DÉDUPLICATION
+        if (processedVisitors[visitorId]) {
+            console.log(`🔄 Visitor ${visitorId} already processed, skipping...`);
+            return res.json({
+                success: true,
+                message: 'Visitor already processed - deduplication active',
+                visitor_id: visitorId,
+                duplicate: true,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         // Stocker les données pour analyse immédiate
-        visitorBehaviorData[behavioralData.visitor_id] = {
+        visitorBehaviorData[visitorId] = {
             ...behavioralData,
             received_at: new Date().toISOString(),
             processed: false
         };
+
+        // MARQUER COMME TRAITÉ
+        processedVisitors[visitorId] = new Date().toISOString();
 
         // Forward to Lindy AI pour analyse comportementale
         const lindyResponse = await axios.post(
@@ -90,12 +177,12 @@ app.post('/api/behavioral-data', async (req, res) => {
 
         console.log('✅ Behavioral data sent to Lindy AI');
 
-        // Réponse immédiate au tracking
         res.json({
             success: true,
             message: 'Behavioral data received and sent for analysis',
-            visitor_id: behavioralData.visitor_id,
-            timestamp: new Date().toISOString()
+            visitor_id: visitorId,
+            timestamp: new Date().toISOString(),
+            duplicate: false
         });
 
     } catch (error) {
@@ -120,7 +207,7 @@ app.post('/api/behavioral-data', async (req, res) => {
 });
 
 // ============================================
-// 2. ENDPOINT: SEND CHAT MESSAGE (FROM LINDY AI)
+// ENDPOINT: SEND CHAT MESSAGE (FROM LINDY AI)
 // ============================================
 app.post('/api/send-chat-message', (req, res) => {
     try {
@@ -178,7 +265,7 @@ app.post('/api/send-chat-message', (req, res) => {
 });
 
 // ============================================
-// 3. ENDPOINT: GET CHAT RESPONSE (FOR FRONTEND)
+// ENDPOINT: GET CHAT RESPONSE (FOR FRONTEND)
 // ============================================
 app.get('/api/chat-response/:visitor_id', (req, res) => {
     const { visitor_id } = req.params;
@@ -209,7 +296,7 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
 });
 
 // ============================================
-// 4. ENDPOINT: SAVE VISITOR MESSAGE (FROM FRONTEND)
+// ENDPOINT: SAVE VISITOR MESSAGE (FROM FRONTEND)
 // ============================================
 app.post('/api/visitor-message', async (req, res) => {
     try {
@@ -262,7 +349,7 @@ app.post('/api/visitor-message', async (req, res) => {
 });
 
 // ============================================
-// 5. ENDPOINT: GET CONVERSATION HISTORY
+// ENDPOINT: GET CONVERSATION HISTORY
 // ============================================
 app.get('/api/conversation/:visitor_id', (req, res) => {
     const { visitor_id } = req.params;
@@ -284,7 +371,7 @@ app.get('/api/conversation/:visitor_id', (req, res) => {
 });
 
 // ============================================
-// 6. ENDPOINT: SAVE CONVERSATION MESSAGE
+// ENDPOINT: SAVE CONVERSATION MESSAGE
 // ============================================
 app.post('/api/conversation/save', (req, res) => {
     try {
@@ -320,7 +407,7 @@ app.post('/api/conversation/save', (req, res) => {
 });
 
 // ============================================
-// 7. ENDPOINT: TRACK CONVERSION
+// ENDPOINT: TRACK CONVERSION
 // ============================================
 app.post('/api/analytics/conversion', async (req, res) => {
     try {
@@ -370,7 +457,7 @@ app.post('/api/analytics/conversion', async (req, res) => {
 });
 
 // ============================================
-// 8. ENDPOINT: PRODUCT SYNC
+// ENDPOINT: PRODUCT SYNC
 // ============================================
 app.post('/api/analytics/product-update', async (req, res) => {
     try {
@@ -416,7 +503,7 @@ app.post('/api/analytics/product-update', async (req, res) => {
 });
 
 // ============================================
-// 9. ENDPOINT: VISITOR ANALYTICS
+// ENDPOINT: VISITOR ANALYTICS
 // ============================================
 app.post('/api/analytics/visitor', (req, res) => {
     try {
@@ -450,7 +537,7 @@ app.post('/api/analytics/visitor', (req, res) => {
 });
 
 // ============================================
-// 10. ENDPOINT: CHAT ANALYTICS
+// ENDPOINT: CHAT ANALYTICS
 // ============================================
 app.post('/api/analytics/chat', (req, res) => {
     try {
@@ -482,43 +569,53 @@ app.post('/api/analytics/chat', (req, res) => {
 });
 
 // ============================================
-// 11. ENDPOINT: GET VISITOR BEHAVIOR DATA (FOR DEBUG)
+// ENDPOINT: GET VISITOR BEHAVIOR DATA (FOR DEBUG)
 // ============================================
 app.get('/api/visitor-data/:visitor_id', (req, res) => {
     const { visitor_id } = req.params;
     
     const behaviorData = visitorBehaviorData[visitor_id];
     const chatHistory = conversationHistory[visitor_id] || [];
+    const processed = !!processedVisitors[visitor_id];
     
     res.json({
         success: true,
         visitor_id: visitor_id,
         behavior_data: behaviorData,
         conversation_history: chatHistory,
+        processed: processed,
+        processed_timestamp: processedVisitors[visitor_id],
         total_behavior_entries: Object.keys(visitorBehaviorData).length,
-        total_conversations: Object.keys(conversationHistory).length
+        total_conversations: Object.keys(conversationHistory).length,
+        total_processed_visitors: Object.keys(processedVisitors).length
     });
 });
 
 // ============================================
-// 12. HEALTH CHECK & STATUS
+// HEALTH CHECK & STATUS (MIS À JOUR)
 // ============================================
 app.get('/health', (req, res) => {
     res.json({
         status: 'OK',
-        message: 'Luminara Express Server is running optimally',
+        message: 'Luminara Express Server with Deduplication is running optimally',
         timestamp: new Date().toISOString(),
         statistics: {
             total_visitors: Object.keys(visitorBehaviorData).length,
             total_conversations: Object.keys(conversationHistory).length,
             total_conversions: analyticsData.conversions.length,
-            total_products: Object.keys(analyticsData.products).length
+            total_products: Object.keys(analyticsData.products).length,
+            total_processed_visitors: Object.keys(processedVisitors).length
         },
         lindy_webhooks: {
-            behavioral: '✅ Configured',
-            chat: '✅ Configured', 
-            conversion: '✅ Configured',
-            product_sync: '✅ Configured'
+            behavioral: '✅ Configured (NEW)',
+            chat: '✅ Configured (NEW)', 
+            conversion: '✅ Configured (NEW)',
+            product_sync: '✅ Configured (NEW)'
+        },
+        features: {
+            deduplication: '✅ Active',
+            real_time_tracking: '✅ Active',
+            analytics: '✅ Active'
         }
     });
 });
@@ -535,12 +632,14 @@ app.use((error, req, res, next) => {
     });
 });
 
-// 404 Handler
+// 404 Handler (MIS À JOUR)
 app.use('*', (req, res) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found',
         available_endpoints: [
+            'GET  /api/deduplication/check?visitor_id={visitor_id}',
+            'POST /api/deduplication/mark',
             'POST /api/behavioral-data',
             'POST /api/send-chat-message',
             'GET  /api/chat-response/:visitor_id',
@@ -561,8 +660,9 @@ app.use('*', (req, res) => {
 // START SERVER
 // ============================================
 app.listen(PORT, () => {
-    console.log(`🚀 Luminara Express Server running on port ${PORT}`);
+    console.log(`🚀 Luminara Express Server with Deduplication running on port ${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/health`);
     console.log(`🌐 Ready for connections from: https://ebusinessag.com`);
-    console.log(`🤖 Lindy AI Webhooks: ✅ ALL CONFIGURED`);
+    console.log(`🤖 Lindy AI Webhooks: ✅ ALL CONFIGURED (NEW WEBHOOKS)`);
+    console.log(`🔄 Deduplication System: ✅ ACTIVE`);
 });
