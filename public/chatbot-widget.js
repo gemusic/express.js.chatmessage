@@ -1,14 +1,15 @@
 // ========================================
-// LUMINARA AI CHATBOT WIDGET - VERSION COMPLÈTE
-// Interface responsive 100% largeur/longueur
+// LUMINARA AI CHATBOT WIDGET - CONNECTÉ À LINDY
 // ========================================
 
 (function() {
 'use strict';
 
-// Configuration
+// Configuration avec VOTRE serveur
 const CONFIG = {
   SERVER_URL: 'https://luminara-express-server.onrender.com',
+  LINDY_CHAT_WEBHOOK: 'https://public.lindy.ai/api/v1/webhooks/lindy/b37b9919-cd88-44d0-8d7c-a6b9c1f2975a',
+  LINDY_CHAT_TOKEN: 'efc5e7594e6107aaca7b0a299ea71a1fabb2a8c6baab22445eb9c4a49c452cf4',
   PRIMARY_COLOR: '#00f0ff',
   SECONDARY_COLOR: '#000000',
   BACKGROUND_COLOR: '#ffffff'
@@ -22,34 +23,48 @@ class LuminaraChatbot {
     this.isLoading = false;
     this.conversation = [];
     this.unreadMessages = 0;
+    this.messageCheckInterval = null;
+    
+    console.log('🤖 Luminara Chatbot initialisé pour:', this.visitorId);
     
     this.init();
   }
 
   getVisitorId() {
-    return window.LuminaraTracker?.getVisitorId() || 
-           localStorage.getItem('luminara_visitor_id') || 
-           'visitor_' + Date.now();
+    // Récupère l'ID du tracker Luminara ou en crée un nouveau
+    if (window.LuminaraTracker && window.LuminaraTracker.getVisitorId) {
+      return window.LuminaraTracker.getVisitorId();
+    }
+    
+    let visitorId = localStorage.getItem('luminara_visitor_id');
+    if (!visitorId) {
+      visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('luminara_visitor_id', visitorId);
+    }
+    return visitorId;
   }
 
   init() {
     this.createWidget();
     this.loadConversation();
     this.setupEventListeners();
-    this.checkForNewMessages();
+    this.startMessagePolling();
     
-    // Vérifier les nouvelles messages toutes les 5 secondes
-    setInterval(() => this.checkForNewMessages(), 5000);
+    // Vérifier s'il y a des messages non lus au démarrage
+    setTimeout(() => this.checkForNewMessages(), 2000);
   }
 
   createWidget() {
-    // Créer le conteneur principal
+    // Éviter les doublons
+    if (document.getElementById('luminara-chatbot-widget')) {
+      return;
+    }
+
     this.widgetContainer = document.createElement('div');
     this.widgetContainer.id = 'luminara-chatbot-widget';
     this.widgetContainer.innerHTML = this.getWidgetHTML();
     document.body.appendChild(this.widgetContainer);
 
-    // Appliquer les styles
     this.applyStyles();
   }
 
@@ -93,8 +108,8 @@ class LuminaraChatbot {
               <i class="fas fa-robot"></i>
             </div>
             <div class="welcome-text">
-              <h4>Bonjour ! Je suis Luminara AI</h4>
-              <p>Je suis là pour vous aider à trouver les meilleurs produits tech. Posez-moi vos questions !</p>
+              <h4>Bonjour ! Je suis Luminara AI 🤖</h4>
+              <p>Votre assistant personnel pour découvrir nos produits tech innovants. Comment puis-je vous aider aujourd'hui ?</p>
             </div>
           </div>
           <div class="messages-container" id="messagesContainer">
@@ -106,7 +121,7 @@ class LuminaraChatbot {
               <span></span>
               <span></span>
             </div>
-            <span>Luminara écrit...</span>
+            <span>Luminara rédige une réponse...</span>
           </div>
         </div>
 
@@ -117,6 +132,7 @@ class LuminaraChatbot {
               id="messageInput" 
               placeholder="Tapez votre message..." 
               rows="1"
+              maxlength="500"
             ></textarea>
             <button class="send-btn" id="sendBtn">
               <i class="fas fa-paper-plane"></i>
@@ -346,6 +362,7 @@ class LuminaraChatbot {
           line-height: 1.4;
           position: relative;
           animation: messageSlide 0.3s ease-out;
+          word-wrap: break-word;
         }
 
         @keyframes messageSlide {
@@ -467,6 +484,7 @@ class LuminaraChatbot {
 
         .send-btn:hover {
           background: ${CONFIG.PRIMARY_COLOR};
+          color: ${CONFIG.SECONDARY_COLOR};
           transform: scale(1.05);
         }
 
@@ -631,6 +649,13 @@ class LuminaraChatbot {
         this.closeChat();
       }
     });
+
+    // Gérer la touche Echap
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen) {
+        this.closeChat();
+      }
+    });
   }
 
   toggleChat() {
@@ -642,6 +667,9 @@ class LuminaraChatbot {
       document.getElementById('messageInput').focus();
       this.clearNotifications();
       this.scrollToBottom();
+      
+      // Vérifier s'il y a de nouvelles réponses quand on ouvre
+      this.checkForNewMessages();
     } else {
       interface.classList.remove('open');
     }
@@ -653,12 +681,12 @@ class LuminaraChatbot {
     
     if (this.isMinimized) {
       interface.classList.add('minimized');
-      document.getElementById('chatbotBody').style.display = 'none';
-      document.getElementById('minimizeBtn').innerHTML = '<i class="fas fa-window-maximize"></i>';
+      document.querySelector('.chatbot-body').style.display = 'none';
+      document.querySelector('.chatbot-footer').style.display = 'none';
     } else {
       interface.classList.remove('minimized');
-      document.getElementById('chatbotBody').style.display = 'flex';
-      document.getElementById('minimizeBtn').innerHTML = '<i class="fas fa-window-minimize"></i>';
+      document.querySelector('.chatbot-body').style.display = 'flex';
+      document.querySelector('.chatbot-footer').style.display = 'block';
     }
   }
 
@@ -667,8 +695,8 @@ class LuminaraChatbot {
     this.isMinimized = false;
     const interface = document.getElementById('luminaraInterface');
     interface.classList.remove('open', 'minimized');
-    document.getElementById('chatbotBody').style.display = 'flex';
-    document.getElementById('minimizeBtn').innerHTML = '<i class="fas fa-window-minimize"></i>';
+    document.querySelector('.chatbot-body').style.display = 'flex';
+    document.querySelector('.chatbot-footer').style.display = 'block';
   }
 
   autoResizeTextarea(textarea) {
@@ -686,12 +714,15 @@ class LuminaraChatbot {
     this.addMessage('user', message);
     input.value = '';
     this.autoResizeTextarea(input);
+    input.style.height = 'auto';
 
     // Afficher l'indicateur de frappe
     this.showTypingIndicator();
 
-    // Envoyer au serveur
     try {
+      console.log('📤 Envoi message visiteur à Lindy:', message);
+      
+      // Envoyer le message visiteur à VOTRE serveur
       const response = await fetch(`${CONFIG.SERVER_URL}/api/visitor-message`, {
         method: 'POST',
         headers: {
@@ -699,24 +730,33 @@ class LuminaraChatbot {
         },
         body: JSON.stringify({
           visitor_id: this.visitorId,
-          message: message
+          message: message,
+          timestamp: new Date().toISOString(),
+          source: 'chatbot_widget'
         })
       });
 
-      if (!response.ok) throw new Error('Network error');
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erreur serveur');
+      }
 
-      // Attendre la réponse AI
+      console.log('✅ Message envoyé au serveur, attente réponse Lindy...');
+
+      // Attendre la réponse AI de Lindy
       await this.waitForAIResponse();
 
     } catch (error) {
-      console.error('Error sending message:', error);
-      this.addMessage('assistant', 'Désolé, je rencontre des difficultés techniques. Pouvez-vous réessayer ?');
+      console.error('❌ Erreur envoi message:', error);
       this.hideTypingIndicator();
+      this.addMessage('assistant', 'Désolé, je rencontre des difficultés techniques. Pouvez-vous réessayer dans un moment ?');
     }
   }
 
-  async waitForAIResponse(maxAttempts = 10) {
+  async waitForAIResponse(maxAttempts = 15) {
     let attempts = 0;
+    console.log('🕒 Attente réponse Lindy AI...');
     
     const checkResponse = async () => {
       attempts++;
@@ -726,6 +766,7 @@ class LuminaraChatbot {
         const data = await response.json();
 
         if (data.success && data.message) {
+          console.log('✅ Réponse Lindy reçue:', data.message.substring(0, 50) + '...');
           this.hideTypingIndicator();
           this.addMessage('assistant', data.message);
           
@@ -737,22 +778,23 @@ class LuminaraChatbot {
         }
 
         if (attempts >= maxAttempts) {
+          console.log('⏰ Timeout attente réponse Lindy');
           this.hideTypingIndicator();
-          this.addMessage('assistant', 'Je met un peu de temps à réfléchir... Pouvez-vous reformuler votre question ?');
+          this.addMessage('assistant', 'Je prends un peu plus de temps que prévu pour réfléchir... N\'hésitez pas à reformuler votre question !');
           return true;
         }
 
-        // Réessayer après 1 seconde
-        setTimeout(checkResponse, 1000);
+        // Réessayer après 1.5 secondes
+        setTimeout(checkResponse, 1500);
         
       } catch (error) {
-        console.error('Error checking AI response:', error);
+        console.error('❌ Erreur vérification réponse:', error);
         if (attempts >= maxAttempts) {
           this.hideTypingIndicator();
-          this.addMessage('assistant', 'Erreur de connexion. Veuillez réessayer.');
+          this.addMessage('assistant', 'Problème de connexion avec notre service AI. Veuillez réessayer.');
           return true;
         }
-        setTimeout(checkResponse, 1000);
+        setTimeout(checkResponse, 1500);
       }
     };
 
@@ -788,30 +830,40 @@ class LuminaraChatbot {
   }
 
   formatMessage(content) {
-    // Formater les liens
-    content = content.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" style="color: #00f0ff; text-decoration: underline;">$1</a>');
+    if (!content) return '';
+    
+    // Formater les liens markdown
+    content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color: #00f0ff; text-decoration: underline;">$1</a>');
     
     // Formater le texte en gras
-    content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     
     // Formater les sauts de ligne
     content = content.replace(/\n/g, '<br>');
+    
+    // Formater les listes
+    content = content.replace(/^- (.+)$/gm, '• $1<br>');
     
     return content;
   }
 
   showRecommendedProducts(products) {
+    if (!products || products.length === 0) return;
+    
     const messagesContainer = document.getElementById('messagesContainer');
     const productsDiv = document.createElement('div');
     
     productsDiv.className = 'message assistant';
     productsDiv.innerHTML = `
       <div class="message-content">
-        <strong>🎯 Produits recommandés :</strong><br>
+        <strong>🎯 Produits recommandés pour vous :</strong><br><br>
         ${products.map(product => `
-          • <strong>${product.name}</strong> - $${product.price}<br>
-          <em>${product.description || 'Produit premium Luminara'}</em>
-        `).join('<br>')}
+          <div style="margin-bottom: 12px; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+            <strong>${product.name || 'Produit'}</strong><br>
+            <span style="color: #00f0ff; font-weight: bold;">$${product.price || '0'}</span>
+            ${product.description ? `<br><small>${product.description}</small>` : ''}
+          </div>
+        `).join('')}
       </div>
     `;
 
@@ -834,11 +886,22 @@ class LuminaraChatbot {
 
   scrollToBottom() {
     const messagesContainer = document.getElementById('messagesContainer');
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }
+
+  startMessagePolling() {
+    // Vérifier les nouvelles réponses toutes les 3 secondes
+    this.messageCheckInterval = setInterval(() => {
+      if (!this.isOpen) {
+        this.checkForNewMessages();
+      }
+    }, 3000);
   }
 
   async checkForNewMessages() {
-    if (this.isOpen || this.isLoading) return;
+    if (this.isLoading) return;
 
     try {
       const response = await fetch(`${CONFIG.SERVER_URL}/api/chat-response/${this.visitorId}`);
@@ -848,75 +911,125 @@ class LuminaraChatbot {
         this.unreadMessages++;
         this.showNotification();
         
-        // Notification sonore (optionnelle)
+        // Notification sonore douce
         this.playNotificationSound();
       }
     } catch (error) {
-      console.error('Error checking new messages:', error);
+      console.error('Erreur vérification nouveaux messages:', error);
     }
   }
 
   showNotification() {
     const badge = document.getElementById('notificationBadge');
-    badge.textContent = this.unreadMessages;
-    badge.style.display = 'flex';
-    
-    // Animation de pulsation
-    badge.style.animation = 'pulse 1s infinite';
+    if (badge) {
+      badge.textContent = this.unreadMessages;
+      badge.style.display = 'flex';
+      
+      // Animation de pulsation
+      badge.style.animation = 'pulse 1s infinite';
+    }
   }
 
   clearNotifications() {
     this.unreadMessages = 0;
     const badge = document.getElementById('notificationBadge');
-    badge.style.display = 'none';
-    badge.style.animation = 'none';
+    if (badge) {
+      badge.style.display = 'none';
+      badge.style.animation = 'none';
+    }
   }
 
   playNotificationSound() {
-    // Créer un son de notification simple
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    gainNode.gain.value = 0.1;
-    
-    oscillator.start();
-    setTimeout(() => oscillator.stop(), 100);
+    // Créer un son de notification simple et discret
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      gainNode.gain.value = 0.1;
+      
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioContext.close();
+      }, 100);
+    } catch (e) {
+      console.log('Audio context non supporté');
+    }
   }
 
   loadConversation() {
-    const saved = localStorage.getItem(`luminara_conversation_${this.visitorId}`);
-    if (saved) {
-      this.conversation = JSON.parse(saved);
-      this.renderConversation();
+    try {
+      const saved = localStorage.getItem(`luminara_conversation_${this.visitorId}`);
+      if (saved) {
+        this.conversation = JSON.parse(saved);
+        this.renderConversation();
+      }
+    } catch (e) {
+      console.error('Erreur chargement conversation:', e);
     }
   }
 
   saveConversation() {
-    localStorage.setItem(`luminara_conversation_${this.visitorId}`, JSON.stringify(this.conversation));
+    try {
+      // Garder seulement les 50 derniers messages pour éviter le stockage excessif
+      if (this.conversation.length > 50) {
+        this.conversation = this.conversation.slice(-50);
+      }
+      localStorage.setItem(`luminara_conversation_${this.visitorId}`, JSON.stringify(this.conversation));
+    } catch (e) {
+      console.error('Erreur sauvegarde conversation:', e);
+    }
   }
 
   renderConversation() {
     const messagesContainer = document.getElementById('messagesContainer');
+    if (!messagesContainer) return;
+
     messagesContainer.innerHTML = '';
 
     this.conversation.forEach(msg => {
       this.addMessage(msg.role, msg.content);
     });
   }
+
+  // Nettoyage
+  destroy() {
+    if (this.messageCheckInterval) {
+      clearInterval(this.messageCheckInterval);
+    }
+    if (this.widgetContainer && this.widgetContainer.parentNode) {
+      this.widgetContainer.parentNode.removeChild(this.widgetContainer);
+    }
+  }
 }
 
 // Initialisation quand la page est chargée
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    new LuminaraChatbot();
+    console.log('🚀 Initialisation Luminara Chatbot...');
+    window.LuminaraChatbot = new LuminaraChatbot();
   });
 } else {
-  new LuminaraChatbot();
+  console.log('🚀 Initialisation Luminara Chatbot...');
+  window.LuminaraChatbot = new LuminaraChatbot();
 }
+
+// API globale pour contrôle externe
+window.LuminaraChatbotAPI = {
+  open: () => window.LuminaraChatbot?.toggleChat(),
+  close: () => window.LuminaraChatbot?.closeChat(),
+  sendMessage: (message) => {
+    if (window.LuminaraChatbot) {
+      document.getElementById('messageInput').value = message;
+      window.LuminaraChatbot.sendMessage();
+    }
+  },
+  getVisitorId: () => window.LuminaraChatbot?.visitorId
+};
 
 })();
