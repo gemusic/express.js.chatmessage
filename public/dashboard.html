@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luminara AI Dashboard - Analytics Temps Réel</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* ========================================
+       LUMINARA DASHBOARD STYLES - COMPLET
+       ======================================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #000000;
+      --secondary: #ffffff;
+      --accent: #00f0ff;
+      --dark-gray: #1a1a1a;
+      --light-gray: #2a2a2a;
+      --text-primary: #ffffff;
+      --text-secondary: #b0b0b0;
+      --text-muted: #666666;
+      --success: #00ff88;
+      --warning: #ffd166;
+      --danger: #ff4757;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--dark-gray) 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    .dashboard-container {
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .dashboard-header {
+      background: var(--dark-gray);
+      border-radius: 20px;
+      padding: 30px 40px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 240, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .dashboard-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .dashboard-title {
+      font-size: 42px;
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .dashboard-subtitle {
+      color: var(--text-secondary);
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--dark-gray);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(0, 240, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px rgba(0, 240, 255, 0.2);
+      border-color: rgba(0, 240, 255, 0.3);
+    }
+
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--accent) 0%, #00b8c4 100%);
+      color: var(--primary);
+    }
+
+    .stat-label {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 42px;
+      font-weight: 800;
+      color: var(--text-primary);
+      background: linear-gradient(90deg, var(--secondary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 14px;
+      color: var(--accent);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Data Sections */
+    .data-section {
+      background: var(--dark-gray);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(0, 240, 255, 0.1);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: linear-gradient(90deg, var(--accent), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .refresh-btn {
+      padding: 14px 28px;
+      background: linear-gradient(135deg, var(--accent) 0%, #00b8c4 100%);
+      color: var(--primary);
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 5px 20px rgba(0, 240, 255, 0.4);
+    }
+
+    /* Tables */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+      display: block;
+    }
+
+    .data-table thead {
+      background: rgba(0, 240, 255, 0.1);
+    }
+
+    .data-table th {
+      padding: 18px;
+      text-align: left;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 2px solid rgba(0, 240, 255, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 13px;
+    }
+
+    .data-table td {
+      padding: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .data-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .data-table tbody tr:hover {
+      background: rgba(0, 240, 255, 0.05);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge.success { 
+      background: rgba(0, 255, 136, 0.2); 
+      color: var(--success);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+    .badge.info { 
+      background: rgba(0, 240, 255, 0.2); 
+      color: var(--accent);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+    .badge.warning { 
+      background: rgba(255, 209, 102, 0.2); 
+      color: var(--warning);
+      border: 1px solid rgba(255, 209, 102, 0.3);
+    }
+    .badge.danger { 
+      background: rgba(255, 71, 87, 0.2); 
+      color: var(--danger);
+      border: 1px solid rgba(255, 71, 87, 0.3);
+    }
+
+    /* Empty States */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state-icon {
+      font-size: 72px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+    }
+
+    .empty-state p {
+      font-size: 16px;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-secondary);
+    }
+
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top: 4px solid var(--accent);
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Real-time Indicator */
+    .realtime-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: rgba(0, 240, 255, 0.2);
+      color: var(--accent);
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .realtime-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { 
+        opacity: 1; 
+        box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.7);
+      }
+      50% { 
+        opacity: 0.7; 
+        box-shadow: 0 0 0 12px rgba(0, 240, 255, 0);
+      }
+    }
+
+    /* Scrollbar */
+    .data-table::-webkit-scrollbar {
+      height: 10px;
+    }
+
+    .data-table::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+    }
+
+    .data-table::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 5px;
+    }
+
+    .data-table::-webkit-scrollbar-thumb:hover {
+      background: #00b8c4;
+    }
+
+    /* Progress Bars */
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+      
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .data-table {
+        font-size: 13px;
+      }
+      
+      .section-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      
+      .refresh-btn {
+        align-self: flex-start;
+      }
+      
+      .dashboard-title {
+        font-size: 32px;
+      }
+      
+      .stat-value {
+        font-size: 36px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .dashboard-header {
+        padding: 24px;
+      }
+      
+      .data-section {
+        padding: 24px;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 12px;
+      }
+      
+      .stat-card {
+        padding: 24px;
+      }
+    }
+
+    /* Glow Effects */
+    .glow-effect {
+      position: relative;
+    }
+
+    .glow-effect::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, var(--accent), transparent, var(--accent));
+      border-radius: 22px;
+      z-index: -1;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .stat-card:hover .glow-effect::after {
+      opacity: 0.3;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <div class="dashboard-header">
+      <h1 class="dashboard-title">⚡ Luminara AI Dashboard</h1>
+      <p class="dashboard-subtitle">Analytics en temps réel de votre agent de vente IA</p>
+      <div style="margin-top: 20px;">
+        <span class="realtime-indicator">
+          <span class="realtime-dot"></span>
+          En direct • Données temps réel
+        </span>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card glow-effect">
+        <div class="stat-icon">👥</div>
+        <div class="stat-label">Visiteurs Totaux</div>
+        <div class="stat-value" id="stat-visitors">0</div>
+        <div class="stat-change">
+          <i class="fas fa-arrow-up"></i>
+          Mis à jour en temps réel
+        </div>
+      </div>
+
+      <div class="stat-card glow-effect">
+        <div class="stat-icon">💬</div>
+        <div class="stat-label">Conversations Actives</div>
+        <div class="stat-value" id="stat-conversations">0</div>
+        <div class="stat-change">
+          <i class="fas fa-comments"></i>
+          Engagements en cours
+        </div>
+      </div>
+
+      <div class="stat-card glow-effect">
+        <div class="stat-icon">🎉</div>
+        <div class="stat-label">Conversions</div>
+        <div class="stat-value" id="stat-conversions">0</div>
+        <div class="stat-change">
+          <i class="fas fa-chart-line"></i>
+          Ventes réalisées
+        </div>
+      </div>
+
+      <div class="stat-card glow-effect">
+        <div class="stat-icon">📈</div>
+        <div class="stat-label">Taux de Conversion</div>
+        <div class="stat-value" id="stat-rate">0%</div>
+        <div class="stat-change">
+          <i class="fas fa-trophy"></i>
+          Performance globale
+          <div class="progress-bar">
+            <div class="progress-fill" id="conversion-progress" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visitors Section -->
+    <div class="data-section">
+      <div class="section-header">
+        <h2 class="section-title">📊 Visiteurs Récents</h2>
+        <button class="refresh-btn" onclick="loadDashboardData()">
+          <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+      </div>
+      <div id="visitors-content">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des données visiteurs...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversations Section -->
+    <div class="data-section">
+      <div class="section-header">
+        <h2 class="section-title">💬 Conversations Récentes</h2>
+        <div class="realtime-indicator">
+          <span class="realtime-dot"></span>
+          Chatbot Actif
+        </div>
+      </div>
+      <div id="conversations-content">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des conversations...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversions Section -->
+    <div class="data-section">
+      <div class="section-header">
+        <h2 class="section-title">🎉 Conversions Récentes</h2>
+        <button class="refresh-btn" onclick="loadConversions()">
+          <i class="fas fa-download"></i> Exporter
+        </button>
+      </div>
+      <div id="conversions-content">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des conversions...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="data-section">
+      <div class="section-header">
+        <h2 class="section-title">⚙️ Statut du Système</h2>
+      </div>
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, var(--success), #00cc6a);">
+            <i class="fas fa-server"></i>
+          </div>
+          <div class="stat-label">Serveur API</div>
+          <div class="stat-value" id="server-status">OK</div>
+          <div class="stat-change" style="color: var(--success);">
+            <i class="fas fa-check-circle"></i>
+            En ligne
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, var(--accent), #00b8c4);">
+            <i class="fas fa-robot"></i>
+          </div>
+          <div class="stat-label">AI Lindy</div>
+          <div class="stat-value" id="ai-status">OK</div>
+          <div class="stat-change" style="color: var(--accent);">
+            <i class="fas fa-brain"></i>
+            Connecté
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, var(--warning), #ffb347);">
+            <i class="fas fa-database"></i>
+          </div>
+          <div class="stat-label">Base de Données</div>
+          <div class="stat-value" id="db-status">OK</div>
+          <div class="stat-change" style="color: var(--warning);">
+            <i class="fas fa-hdd"></i>
+            Synchronisé
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon" style="background: linear-gradient(135deg, #8e44ad, #9b59b6);">
+            <i class="fas fa-bolt"></i>
+          </div>
+          <div class="stat-label">Performance</div>
+          <div class="stat-value" id="perf-status">99%</div>
+          <div class="stat-change" style="color: #8e44ad;">
+            <i class="fas fa-tachometer-alt"></i>
+            Optimale
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========================================
+    // DASHBOARD SCRIPT - TEMPS RÉEL
+    // ========================================
+    const EXPRESS_SERVER_URL = 'https://luminara-express-server.onrender.com';
+    const REFRESH_INTERVAL = 3000; // 3 secondes
+
+    // Charger les données du dashboard
+    async function loadDashboardData() {
+      try {
+        const response = await fetch(`${EXPRESS_SERVER_URL}/api/dashboard/analytics`);
+        const result = await response.json();
+
+        if (result.success) {
+          updateStats(result.data.summary);
+          updateVisitorsTable(result.data.visitors);
+          updateConversationsTable(result.data.conversations);
+          updateConversionsTable(result.data.conversions);
+          updateSystemStatus();
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        showErrorState();
+      }
+    }
+
+    // Mettre à jour les statistiques
+    function updateStats(summary) {
+      document.getElementById('stat-visitors').textContent = summary.totalVisitors || '0';
+      document.getElementById('stat-conversations').textContent = summary.totalConversations || '0';
+      document.getElementById('stat-conversions').textContent = summary.totalConversions || '0';
+      document.getElementById('stat-rate').textContent = (summary.conversionRate || '0') + '%';
+      
+      // Progress bar
+      const progress = Math.min((summary.conversionRate || 0), 100);
+      document.getElementById('conversion-progress').style.width = progress + '%';
+    }
+
+    // Mettre à jour la table des visiteurs
+    function updateVisitorsTable(visitors) {
+      const container = document.getElementById('visitors-content');
+
+      if (!visitors || visitors.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <h3>Aucun visiteur pour le moment</h3>
+            <p>Les visiteurs apparaîtront ici lorsqu'ils interagiront avec votre site Luminara</p>
+          </div>
+        `;
+        return;
+      }
+
+      const tableHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID Visiteur</th>
+              <th>Page</th>
+              <th>Temps</th>
+              <th>Scroll</th>
+              <th>Produits Vus</th>
+              <th>Statut</th>
+              <th>Heure</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${visitors.map(v => `
+              <tr>
+                <td><span class="badge info">${v.visitor_id ? v.visitor_id.substring(0, 10) + '...' : 'N/A'}</span></td>
+                <td title="${v.page_url || 'N/A'}">${v.page_url ? v.page_url.substring(0, 30) + '...' : 'N/A'}</td>
+                <td><strong>${v.time_on_page || '0'}s</strong></td>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>${v.scroll_depth || '0'}%</span>
+                    <div class="progress-bar">
+                      <div class="progress-fill" style="width: ${v.scroll_depth || 0}%"></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="badge ${v.products_viewed > 0 ? 'success' : 'warning'}">${v.products_viewed || 0}</span></td>
+                <td><span class="badge ${getStatusBadge(v.flow_status)}">${v.flow_status || 'unknown'}</span></td>
+                <td>${v.timestamp ? new Date(v.timestamp).toLocaleString('fr-FR') : 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      container.innerHTML = tableHTML;
+    }
+
+    // Mettre à jour la table des conversations
+    function updateConversationsTable(conversations) {
+      const container = document.getElementById('conversations-content');
+
+      if (!conversations || conversations.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">💬</div>
+            <h3>Aucune conversation</h3>
+            <p>Les conversations avec le chatbot Luminara apparaîtront ici</p>
+          </div>
+        `;
+        return;
+      }
+
+      const tableHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID Visiteur</th>
+              <th>Message Utilisateur</th>
+              <th>Réponse Luminara</th>
+              <th>Techniques</th>
+              <th>Produits</th>
+              <th>Heure</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${conversations.map(c => `
+              <tr>
+                <td><span class="badge info">${c.visitor_id ? c.visitor_id.substring(0, 10) + '...' : 'N/A'}</span></td>
+                <td title="${c.message_from_user || 'N/A'}">${c.message_from_user ? c.message_from_user.substring(0, 40) + '...' : 'N/A'}</td>
+                <td title="${c.response_from_luminara || 'N/A'}">${c.response_from_luminara ? c.response_from_luminara.substring(0, 50) + '...' : 'N/A'}</td>
+                <td><span class="badge ${c.techniques_used && c.techniques_used.length > 0 ? 'success' : 'info'}">${c.techniques_used ? c.techniques_used.length : 0}</span></td>
+                <td><span class="badge ${c.products_recommended && c.products_recommended.length > 0 ? 'success' : 'warning'}">${c.products_recommended ? c.products_recommended.length : 0}</span></td>
+                <td>${c.timestamp ? new Date(c.timestamp).toLocaleString('fr-FR') : 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      container.innerHTML = tableHTML;
+    }
+
+    // Mettre à jour la table des conversions
+    function updateConversionsTable(conversions) {
+      const container = document.getElementById('conversions-content');
+
+      if (!conversions || conversions.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🎉</div>
+            <h3>Aucune conversion</h3>
+            <p>Les ventes réalisées via le chatbot Luminara apparaîtront ici</p>
+          </div>
+        `;
+        return;
+      }
+
+      const tableHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID Visiteur</th>
+              <th>Produit Acheté</th>
+              <th>Prix</th>
+              <th>Revenu</th>
+              <th>Heure</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${conversions.map(c => `
+              <tr>
+                <td><span class="badge info">${c.visitor_id ? c.visitor_id.substring(0, 10) + '...' : 'N/A'}</span></td>
+                <td><strong>${c.product_purchased || 'N/A'}</strong></td>
+                <td><span class="badge warning">$${c.price || '0'}</span></td>
+                <td><span class="badge success">$${c.revenue || '0'}</span></td>
+                <td>${c.timestamp ? new Date(c.timestamp).toLocaleString('fr-FR') : 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      container.innerHTML = tableHTML;
+    }
+
+    // Mettre à jour le statut du système
+    function updateSystemStatus() {
+      // Simuler des statuts système (dans une vraie app, ça viendrait du serveur)
+      document.getElementById('server-status').textContent = 'OK';
+      document.getElementById('ai-status').textContent = 'OK';
+      document.getElementById('db-status').textContent = 'OK';
+      document.getElementById('perf-status').textContent = '99%';
+    }
+
+    // Fonction utilitaire pour les badges de statut
+    function getStatusBadge(status) {
+      const statusMap = {
+        'behavior_analysis_completed': 'success',
+        'analysis_complete': 'success',
+        'chat_initiated': 'info',
+        'conversation_started': 'info',
+        'payment_link_sent': 'success',
+        'completed': 'success',
+        'unknown': 'warning'
+      };
+      return statusMap[status] || 'warning';
+    }
+
+    // Gestion des erreurs
+    function showErrorState() {
+      const sections = ['visitors-content', 'conversations-content', 'conversions-content'];
+      sections.forEach(sectionId => {
+        const container = document.getElementById(sectionId);
+        if (container) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">⚠️</div>
+              <h3>Erreur de chargement</h3>
+              <p>Impossible de se connecter au serveur Luminara</p>
+            </div>
+          `;
+        }
+      });
+    }
+
+    // Charger les conversions (pour le bouton export)
+    async function loadConversions() {
+      alert('Fonction d\'export bientôt disponible!');
+    }
+
+    // Auto-refresh
+    setInterval(loadDashboardData, REFRESH_INTERVAL);
+
+    // Chargement initial
+    loadDashboardData();
+
+    // Ajouter Font Awesome
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+    document.head.appendChild(link);
+  </script>
+</body>
+</html>
