@@ -1,22 +1,27 @@
 {
-  "name": "luminara-ai-ecommerce",
-  "version": "1.0.0",
-  "description": "Système e-commerce Luminara avec IA de vente et tracking comportemental",
+  "name": "luminara-express-server",
+  "version": "2.0.0",
+  "description": "Serveur complet Luminara AI avec tracking, chatbot et dashboard",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "deploy": "npm start"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "axios": "^1.6.0",
-    "helmet": "^7.1.0",
-    "compression": "^1.7.4",
-    "express-rate-limit": "^7.1.5",
-    "uuid": "^9.0.1"
+    "axios": "^1.6.0"
   },
   "engines": {
-    "node": ">=18.0.0"
-  }
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "luminara",
+    "ai",
+    "ecommerce",
+    "tracking",
+    "chatbot",
+    "analytics"
+  ]
 }
