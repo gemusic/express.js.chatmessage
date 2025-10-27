@@ -1,5 +1,5 @@
 // ============================================
-// LUMINARA EXPRESS SERVER - SYSTÈME COMPLET
+// LUMINARA EXPRESS SERVER - SYSTÈME COMPLET AVEC PAIEMENTS
 // ============================================
 
 const express = require('express');
@@ -22,7 +22,7 @@ const LINDY_WEBHOOKS = {
 
 const LINDY_WEBHOOK_TOKENS = {
   BEHAVIORAL_ANALYSIS: 'b485b30708af35cacf531464d3958c0f2e571dfba26d142a4a595a53e851acc1',
-  CHAT_MESSAGE: 'c53acc7506a4b8997e31cd6aee2303a9c69ea774ec17db389cebedf8d33d58fe',
+  CHAT_MESSAGE: 'ccfc2755eedd30d02f4ec096517c06e95cc25e5ad4afe8de4f53ee1d3d30299a', // NOUVEAU TOKEN
   CONVERSION: 'd004737d70efaaab01d8984a41a0248f89e747fa638c371f061a5847c760c0c0',
   PRODUCT_SYNC: '5a86dedf6795e9c45e637de3fb02c3e1a3a1d813c27e919c33808a3fba2c3f12'
 };
@@ -76,9 +76,6 @@ const analyticsData = {
 // ============================================
 
 // [1] ENDPOINT: RECEIVE BEHAVIORAL DATA (Début du flow)
-// Reçoit: Données de tracking du visiteur
-// Envoie à: Lindy AI Behavioral Analysis
-// Utilisé par: Script de tracking
 app.post('/api/behavioral-data', async (req, res) => {
   try {
     const behavioralData = req.body;
@@ -129,12 +126,9 @@ app.post('/api/behavioral-data', async (req, res) => {
 });
 
 // [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI)
-// Reçoit: Message du chatbot généré par Lindy AI
-// Stocke: Réponse du chatbot pour le visiteur
-// Utilisé par: Webhook Lindy AI
 app.post('/api/send-chat-message', (req, res) => {
   try {
-    const { visitor_id, message, techniques_used, recommended_products, confidence_score, message_type } = req.body;
+    const { visitor_id, message, techniques_used, recommended_products, confidence_score, message_type, payment_product } = req.body;
 
     console.log(`🤖 AI Chat message for ${visitor_id}:`, message);
 
@@ -146,7 +140,8 @@ app.post('/api/send-chat-message', (req, res) => {
       confidence_score: confidence_score || 0,
       timestamp: new Date().toISOString(),
       read: false,
-      message_type: message_type || 'response'
+      message_type: message_type || 'response',
+      payment_product: payment_product || null
     };
 
     // Sauvegarder dans l'historique
@@ -160,7 +155,8 @@ app.post('/api/send-chat-message', (req, res) => {
       techniques_used: techniques_used,
       recommended_products: recommended_products,
       timestamp: new Date().toISOString(),
-      message_type: message_type || 'response'
+      message_type: message_type || 'response',
+      payment_product: payment_product || null
     });
 
     res.json({ 
@@ -176,9 +172,6 @@ app.post('/api/send-chat-message', (req, res) => {
 });
 
 // [3] ENDPOINT: GET CHAT RESPONSE (For Frontend)
-// Reçoit: Rien (GET)
-// Retourne: Dernière réponse AI non lue pour le visiteur
-// Utilisé par: Widget chatbot frontend
 app.get('/api/chat-response/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
 
@@ -186,13 +179,34 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
     const response = chatResponses[visitor_id];
     chatResponses[visitor_id].read = true;
 
+    // Si un produit de paiement est associé, générer un lien de paiement
+    let payment_data = null;
+    if (response.payment_product) {
+      const product = response.payment_product;
+      const cartData = [{
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+        image: product.image
+      }];
+      
+      const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true`;
+      
+      payment_data = {
+        product: product,
+        payment_url: paymentUrl
+      };
+    }
+
     res.json({
       success: true,
       message: response.message,
       techniques_used: response.techniques_used,
       recommended_products: response.recommended_products,
       confidence_score: response.confidence_score,
-      timestamp: response.timestamp
+      timestamp: response.timestamp,
+      payment_data: payment_data
     });
   } else {
     res.json({ success: true, message: null });
@@ -200,9 +214,6 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
 });
 
 // [4] ENDPOINT: VISITOR MESSAGE (From Frontend)
-// Reçoit: Message du visiteur
-// Envoie à: Lindy AI Chat Message
-// Utilisé par: Widget chatbot frontend
 app.post('/api/visitor-message', async (req, res) => {
   try {
     const { visitor_id, message } = req.body;
@@ -247,9 +258,6 @@ app.post('/api/visitor-message', async (req, res) => {
 });
 
 // [5] ENDPOINT: CONVERSION TRACKING
-// Reçoit: Données de conversion
-// Envoie à: Lindy AI Conversion
-// Utilisé par: Script de tracking, boutons d'achat
 app.post('/api/analytics/conversion', async (req, res) => {
   try {
     const conversionData = req.body;
@@ -281,49 +289,132 @@ app.post('/api/analytics/conversion', async (req, res) => {
   }
 });
 
-// [6] ENDPOINT: PRODUCT SYNC
-// Reçoit: Données produit
-// Envoie à: Lindy AI Product Sync
-// Utilisé par: Système e-commerce
-app.post('/api/analytics/product-update', async (req, res) => {
+// [6] ENDPOINT: GENERATE PAYMENT LINK
+app.post('/api/generate-payment-link', async (req, res) => {
   try {
-    const productData = req.body;
-    console.log('📦 Product update:', productData);
+    const { visitor_id, product_id, product_name, price, description, image } = req.body;
 
-    // Stocker localement
-    if (!analyticsData.products[productData.product_id]) {
-      analyticsData.products[productData.product_id] = [];
+    console.log('💰 Generating payment link for:', visitor_id, product_name);
+
+    // Construire les données du panier
+    const cartData = [{
+      id: product_id,
+      name: product_name,
+      price: price,
+      quantity: 1,
+      image: image
+    }];
+
+    // Construire l'URL de paiement
+    const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true`;
+
+    // Stocker la session de paiement
+    if (!purchaseFlows[visitor_id]) {
+      purchaseFlows[visitor_id] = {};
     }
 
-    analyticsData.products[productData.product_id].push({
-      ...productData,
-      updated_at: new Date().toISOString()
-    });
+    purchaseFlows[visitor_id].current_payment = {
+      product_id: product_id,
+      product_name: product_name,
+      price: price,
+      payment_url: paymentUrl,
+      generated_at: new Date().toISOString()
+    };
 
-    // Envoyer à Lindy AI
-    await axios.post(LINDY_WEBHOOKS.PRODUCT_SYNC, productData, {
-      headers: { 
-        'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.PRODUCT_SYNC}`,
-        'Content-Type': 'application/json' 
+    res.json({
+      success: true,
+      payment_url: paymentUrl,
+      product: {
+        id: product_id,
+        name: product_name,
+        price: price,
+        description: description,
+        image: image
       },
-      timeout: 15000
-    });
-
-    res.json({ 
-      success: true, 
-      message: 'Product data synced with AI system'
+      message: `🎉 **Excellent choix !** Votre produit ${product_name} est prêt. \n\n**Prix :** $${price}\n\nCliquez sur le bouton ci-dessous pour procéder au paiement sécurisé.`
     });
 
   } catch (error) {
-    console.error('❌ Error syncing product:', error.message);
+    console.error('❌ Error generating payment link:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// [7] ENDPOINT: DASHBOARD ANALYTICS
-// Reçoit: Rien (GET)
-// Retourne: Toutes les données pour le dashboard
-// Utilisé par: Page dashboard
+// [7] ENDPOINT: SEND PAYMENT LINK
+app.post('/api/send-payment-link', async (req, res) => {
+  try {
+    const { visitor_id, product_id, product_name, price, description, image } = req.body;
+
+    console.log('💰 Sending payment link for:', visitor_id, product_name);
+
+    // Générer le lien de paiement
+    const cartData = [{
+      id: product_id,
+      name: product_name,
+      price: price,
+      quantity: 1,
+      image: image
+    }];
+
+    const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true`;
+
+    // Stocker comme message de chat avec produit de paiement
+    const productInfo = {
+      id: product_id,
+      name: product_name,
+      price: price,
+      description: description,
+      image: image
+    };
+
+    chatResponses[visitor_id] = {
+      message: `🎉 **Excellent choix !** Votre produit ${product_name} est prêt. \n\n**Prix :** $${price}\n\nCliquez sur le bouton ci-dessous pour procéder au paiement sécurisé.`,
+      payment_product: productInfo,
+      timestamp: new Date().toISOString(),
+      read: false,
+      message_type: 'payment_link'
+    };
+
+    // Ajouter à l'historique
+    if (!conversationHistory[visitor_id]) {
+      conversationHistory[visitor_id] = [];
+    }
+
+    conversationHistory[visitor_id].push({
+      role: 'assistant',
+      message: `🎉 **Excellent choix !** Votre produit ${product_name} est prêt. \n\n**Prix :** $${price}\n\nCliquez sur le bouton ci-dessous pour procéder au paiement sécurisé.`,
+      payment_product: productInfo,
+      timestamp: new Date().toISOString(),
+      message_type: 'payment_link'
+    });
+
+    // Track conversion
+    await axios.post(LINDY_WEBHOOKS.CONVERSION, {
+      visitor_id: visitor_id,
+      event_type: 'payment_link_sent',
+      product: productInfo,
+      timestamp: new Date().toISOString()
+    }, {
+      headers: { 
+        'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.CONVERSION}`,
+        'Content-Type': 'application/json' 
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Payment link sent successfully',
+      visitor_id: visitor_id,
+      payment_url: paymentUrl
+    });
+
+  } catch (error) {
+    console.error('❌ Error sending payment link:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// [8] ENDPOINT: DASHBOARD ANALYTICS
 app.get('/api/dashboard/analytics', (req, res) => {
   try {
     const totalVisitors = Object.keys(visitorBehaviorData).length;
@@ -399,10 +490,7 @@ app.get('/api/dashboard/analytics', (req, res) => {
   }
 });
 
-// [8] ENDPOINT: GET VISITOR DATA
-// Reçoit: visitor_id (param)
-// Retourne: Toutes les données d'un visiteur
-// Utilisé par: Debug, analyse détaillée
+// [9] ENDPOINT: GET VISITOR DATA
 app.get('/api/visitor-data/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
 
@@ -416,10 +504,7 @@ app.get('/api/visitor-data/:visitor_id', (req, res) => {
   });
 });
 
-// [9] ENDPOINT: INITIATE CHAT FLOW
-// Reçoit: visitor_id + contexte
-// Démarre: Flow de conversation automatisé
-// Utilisé par: Système après analyse comportementale
+// [10] ENDPOINT: INITIATE CHAT FLOW
 app.post('/api/initiate-chat-flow', async (req, res) => {
   try {
     const { visitor_id, initial_context } = req.body;
@@ -472,68 +557,6 @@ app.post('/api/initiate-chat-flow', async (req, res) => {
   }
 });
 
-// [10] ENDPOINT: SEND PAYMENT LINK
-// Reçoit: Données de paiement
-// Envoie: Lien de paiement stylisé au visiteur
-// Utilisé par: Chatbot quand prêt pour achat
-app.post('/api/send-payment-link', async (req, res) => {
-  try {
-    const { visitor_id, product_id, product_name, price, payment_url } = req.body;
-
-    console.log('💰 Sending payment link for:', visitor_id, product_name);
-
-    // Générer le message de paiement stylisé
-    const paymentMessage = {
-      message: `🎉 **Excellent choix !** Votre produit ${product_name} est prêt. \n\n**Prix :** $${price}\n\n[🛒 PROCÉDER AU PAIEMENT SÉCURISÉ](${payment_url})`,
-      payment_url: payment_url,
-      product_name: product_name,
-      price: price,
-      styling: {
-        theme: 'premium',
-        button_text: '🛒 Payer Maintenant',
-        urgency: 'limited_time'
-      },
-      timestamp: new Date().toISOString(),
-      message_type: 'payment_link'
-    };
-
-    // Stocker comme message de chat
-    chatResponses[visitor_id] = {
-      ...paymentMessage,
-      read: false
-    };
-
-    // Ajouter à l'historique
-    conversationHistory[visitor_id].push({
-      role: 'assistant',
-      ...paymentMessage
-    });
-
-    // Track conversion
-    await axios.post(LINDY_WEBHOOKS.CONVERSION, {
-      visitor_id: visitor_id,
-      event_type: 'payment_link_sent',
-      product: { product_id, product_name, price },
-      timestamp: new Date().toISOString()
-    }, {
-      headers: { 
-        'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.CONVERSION}`,
-        'Content-Type': 'application/json' 
-      }
-    });
-
-    res.json({
-      success: true,
-      message: 'Payment link sent successfully',
-      visitor_id: visitor_id
-    });
-
-  } catch (error) {
-    console.error('❌ Error sending payment link:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // ============================================
 // SERVIR LES FICHIERS STATIQUES
 // ============================================
@@ -573,11 +596,10 @@ app.get('/health', (req, res) => {
       chat_response: 'GET /api/chat-response/:visitor_id',
       visitor_message: 'POST /api/visitor-message',
       conversion: 'POST /api/analytics/conversion',
-      product_update: 'POST /api/analytics/product-update',
+      payment_link: 'POST /api/send-payment-link',
       dashboard: 'GET /api/dashboard/analytics',
       visitor_data: 'GET /api/visitor-data/:visitor_id',
-      initiate_chat: 'POST /api/initiate-chat-flow',
-      payment_link: 'POST /api/send-payment-link'
+      initiate_chat: 'POST /api/initiate-chat-flow'
     }
   });
 });
