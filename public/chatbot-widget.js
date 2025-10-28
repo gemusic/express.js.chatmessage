@@ -62,6 +62,7 @@
         { id: 50, name: "Echo Wireless Charger Pad", price: 49, category: "accessory", description: "Fast wireless charging with intelligent cooling fan and foreign object detection. Charges through cases up to 5mm thick with premium finish.", image: "https://ebusinessag.com/echo-wireless-charger-pad.jpeg" }
     ];
 
+
     class LuminaraChatWidget {
         constructor() {
             this.isOpen = false;
@@ -71,6 +72,7 @@
             this.visitorId = null;
             this.pollingInterval = null;
             this.hasReceivedWelcome = false;
+            this.pendingPaymentProduct = null; // Nouveau: pour stocker le produit en attente de paiement
 
             this.config = {
                 SERVER_URL: 'https://luminara-express-server.onrender.com',
@@ -86,11 +88,10 @@
         }
 
         // ========================================
-        // INITIALIZATION
+        // INITIALIZATION (identique)
         // ========================================
 
         initializeElements() {
-            // Create widget HTML if it doesn't exist
             if (!document.getElementById('luminara-chat-widget')) {
                 this.createWidgetHTML();
             }
@@ -105,6 +106,496 @@
                 notificationBadge: document.getElementById('notificationBadge'),
                 statusIndicator: document.getElementById('statusIndicator'),
                 closeChat: document.getElementById('closeChat'),
+                minimizeChat: document.getElementById('minimizeChat')
+            };
+        }
+
+        createWidgetHTML() {
+            // Le HTML reste identique
+            const widgetHTML = `
+            <div id="luminara-chat-widget">
+                <!-- Chat Icon with Notification Badge -->
+                <div class="chat-toggle" id="chatToggle">
+                    <div class="chat-icon-inner">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-message-circle"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        <div class="notification-badge" id="notificationBadge">0</div>
+                    </div>
+                    <div class="pulse-ring"></div>
+                </div>
+
+                <!-- Chat Window -->
+                <div class="chat-container" id="chatContainer">
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <div class="chat-header-content">
+                            <div class="ai-avatar">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            </div>
+                            <div class="chat-title">
+                                <h3>Luminara Assistant</h3>
+                                <span class="status" id="statusIndicator">🟢 Online</span>
+                            </div>
+                        </div>
+                        <div class="chat-controls">
+                            <button class="minimize-chat" id="minimizeChat" title="Minimize">−</button>
+                            <button class="close-chat" id="closeChat" title="Close">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Messages Area -->
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- Messages loaded dynamically -->
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="chat-input-container">
+                        <div class="input-wrapper">
+                            <textarea id="chatInput" placeholder="Type your message..." maxlength="500" rows="1"></textarea>
+                            <button id="sendMessage" class="send-button" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                /* Le CSS reste identique */
+                /* ... */
+            </style>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', widgetHTML);
+        }
+
+        initializeVisitor() {
+            if (window.LuminaraTracker) {
+                this.visitorId = window.LuminaraTracker.getVisitorId();
+            } else if (window.LuminaraTracking) {
+                this.visitorId = window.LuminaraTracking.getVisitorId();
+            } else {
+                this.visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                console.warn('Luminara Tracking not detected, using temporary visitorId:', this.visitorId);
+            }
+        }
+
+        initializeEventListeners() {
+            this.elements.chatToggle.addEventListener('click', () => this.toggleChat());
+            this.elements.closeChat.addEventListener('click', () => this.closeChat());
+            this.elements.minimizeChat.addEventListener('click', () => this.minimizeChat());
+
+            this.elements.sendButton.addEventListener('click', () => this.sendMessage());
+            this.elements.chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                }
+            });
+
+            this.elements.chatInput.addEventListener('input', this.autoResize.bind(this));
+            this.elements.chatInput.addEventListener('input', () => this.updateSendButton());
+        }
+
+        initializeChat() {
+            this.startPolling();
+            this.checkForResponses();
+        }
+
+        // ========================================
+        // CHAT STATE MANAGEMENT (identique)
+        // ========================================
+
+        toggleChat() {
+            if (this.isOpen) {
+                this.closeChat();
+            } else {
+                this.openChat();
+            }
+        }
+
+        openChat() {
+            this.elements.chatContainer.classList.add('open');
+            this.isOpen = true;
+            this.resetNotificationBadge();
+            setTimeout(() => {
+                this.elements.chatInput.focus();
+                this.scrollToBottom();
+            }, 300);
+        }
+
+        closeChat() {
+            this.elements.chatContainer.classList.remove('open');
+            this.isOpen = false;
+        }
+
+        minimizeChat() {
+            this.closeChat();
+        }
+
+        // ========================================
+        // MESSAGE MANAGEMENT - MODIFIÉ
+        // ========================================
+
+        async sendMessage() {
+            const message = this.elements.chatInput.value.trim();
+            if (!message || this.isLoading) return;
+
+            this.displayUserMessage(message);
+            this.elements.chatInput.value = '';
+            this.autoResize();
+            this.updateSendButton();
+
+            this.setLoadingState(true);
+            this.showTypingIndicator();
+
+            try {
+                await this.sendToServer(message);
+            } catch (error) {
+                console.error('❌ Error sending message:', error);
+                this.hideTypingIndicator();
+                this.displayErrorMessage(`Sorry, an error occurred while sending: ${error.message}`, true);
+                this.setLoadingState(false);
+            }
+        }
+
+        async sendToServer(message) {
+            const response = await fetch(`${this.config.SERVER_URL}/api/visitor-message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    visitor_id: this.visitorId,
+                    message: message
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.duplicate) {
+                this.hideTypingIndicator();
+                this.setLoadingState(false);
+                this.displayAIMessage("I'm already processing your message, please wait...", true);
+            }
+
+            return data;
+        }
+
+        async checkForResponses() {
+            try {
+                const response = await fetch(`${this.config.SERVER_URL}/api/chat-response/${this.visitorId}`);
+                const data = await response.json();
+
+                if (data.success && data.message) {
+                    this.hideTypingIndicator();
+
+                    // NOUVELLE LOGIQUE : On affiche la carte de paiement uniquement si c'est un message de type payment_link
+                    if (data.payment_data) {
+                        // C'est le message final avec le produit - on affiche la carte de paiement
+                        this.displayPaymentMessage(data.message, data.payment_data.product, data.payment_data.payment_url);
+                    } else {
+                        // Message normal sans paiement
+                        this.displayAIMessage(data.message, true);
+                    }
+
+                    if (data.recommended_products && data.recommended_products.length > 0) {
+                        this.handleRecommendedProducts(data.recommended_products);
+                    }
+
+                    if (!this.hasReceivedWelcome) {
+                        this.hasReceivedWelcome = true;
+                    }
+
+                    this.setLoadingState(false);
+                }
+            } catch (error) {
+                console.error('❌ Polling error:', error);
+            }
+        }
+
+        startPolling() {
+            this.pollingInterval = setInterval(() => {
+                this.checkForResponses();
+            }, this.config.POLLING_INTERVAL);
+        }
+
+        stopPolling() {
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+                this.pollingInterval = null;
+            }
+        }
+
+        handleRecommendedProducts(products) {
+            console.log('📦 Recommended products:', products);
+        }
+
+        // ========================================
+        // PAYMENT CARD MANAGEMENT - CORRECTED
+        // ========================================
+
+        createPaymentCard(product, paymentUrl) {
+            let productImage = product.image;
+            if (productImage && !productImage.startsWith('http')) {
+                productImage = `https://ebusinessag.com/${productImage}`;
+            }
+
+            const fallbackImage = 'https://via.placeholder.com/150x150/000/fff?text=Luminara';
+
+            const paymentCard = document.createElement('div');
+            paymentCard.className = 'payment-card';
+            paymentCard.innerHTML = `
+                <div class="payment-card-header">
+                    <span class="payment-badge">🛒 Secure Payment</span>
+                </div>
+                <div class="payment-card-content">
+                    <div class="payment-product-image">
+                        <img src="${productImage}" alt="${product.name}" onerror="this.src='${fallbackImage}'; this.onerror=null;">
+                    </div>
+                    <div class="payment-product-info">
+                        <h4 class="payment-product-name">${product.name}</h4>
+                        <p class="payment-product-description">${product.description || 'Premium Luminara product'}</p>
+                        <div class="payment-price-section">
+                            <span class="payment-price">$${product.price}</span>
+                            <span class="payment-tax">Tax included</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="payment-card-actions">
+                    <a href="${paymentUrl}" target="_blank" class="payment-button">
+                        <span class="payment-button-text">🛒 Pay Now</span>
+                        <span class="payment-button-arrow">→</span>
+                    </a>
+                </div>
+                <div class="payment-security">
+                    <span class="security-badge">🔒 100% Secure Payment</span>
+                </div>
+            `;
+            return paymentCard;
+        }
+
+        // ========================================
+        // NOUVELLE MÉTHODE POUR LES MESSAGES DE PAIEMENT
+        // ========================================
+
+        displayPaymentMessage(message, product, paymentUrl) {
+            const messageElement = this.createMessageElement('ai', message, true);
+            
+            // Ajouter la carte de paiement uniquement pour le message final
+            const paymentCard = this.createPaymentCard(product, paymentUrl);
+            messageElement.querySelector('.message-text').appendChild(paymentCard);
+            
+            this.elements.chatMessages.appendChild(messageElement);
+            
+            if (!this.isOpen) {
+                this.incrementNotificationBadge();
+            }
+            this.scrollToBottom();
+        }
+
+        // ========================================
+        // MESSAGE DISPLAY - MODIFIÉ
+        // ========================================
+
+        displayUserMessage(message) {
+            const messageElement = this.createMessageElement('user', message, true);
+            this.elements.chatMessages.appendChild(messageElement);
+            this.scrollToBottom();
+        }
+
+        displayAIMessage(message, withTimestamp = true) {
+            const messageElement = this.createMessageElement('ai', message, withTimestamp);
+            
+            // SUPPRIMÉ: Pas de détection automatique de produits dans les messages normaux
+            // La carte de paiement n'apparaît QUE via displayPaymentMessage
+            // lorsqu'elle est explicitement déclenchée par le serveur
+            
+            this.elements.chatMessages.appendChild(messageElement);
+            
+            if (!this.isOpen) {
+                this.incrementNotificationBadge();
+            }
+            this.scrollToBottom();
+        }
+
+        displayErrorMessage(message, withTimestamp) {
+            const errorElement = this.createMessageElement('ai', message, withTimestamp);
+            errorElement.querySelector('.message-text').style.background = 'linear-gradient(135deg, #ff6b6b, #ffa8a8)';
+            errorElement.querySelector('.message-text').style.color = '#fff';
+            this.elements.chatMessages.appendChild(errorElement);
+            this.scrollToBottom();
+        }
+
+        createMessageElement(sender, message, withTimestamp) {
+            const messageGroup = document.createElement('div');
+            messageGroup.className = 'message-group';
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+
+            const timestamp = new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            const timestampHTML = withTimestamp ? `<div class="message-timestamp">${timestamp}</div>` : '';
+
+            const safeMessage = this.escapeHtml(message).replace(/\n/g, '<br>');
+
+            const avatarSvg = sender === 'ai' 
+                ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>'
+                : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-user"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>';
+
+            messageDiv.innerHTML = `
+                <div class="message-avatar">
+                    ${avatarSvg}
+                </div>
+                <div class="message-content">
+                    <div class="message-text">${safeMessage}</div>
+                    ${timestampHTML}
+                </div>
+            `;
+
+            messageGroup.appendChild(messageDiv);
+            return messageGroup;
+        }
+
+        // ========================================
+        // VISUAL INDICATORS (identique)
+        // ========================================
+
+        showTypingIndicator() {
+            if (this.currentTypingIndicator) return;
+
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message-group typing-indicator-group';
+            typingIndicator.innerHTML = `
+                <div class="message ai-message">
+                    <div class="message-avatar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-text">
+                            <div class="typing-indicator">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            this.elements.chatMessages.appendChild(typingIndicator);
+            this.scrollToBottom();
+            this.currentTypingIndicator = typingIndicator;
+        }
+
+        hideTypingIndicator() {
+            if (this.currentTypingIndicator) {
+                this.currentTypingIndicator.remove();
+                this.currentTypingIndicator = null;
+            }
+        }
+
+        // ========================================
+        // NOTIFICATION MANAGEMENT (identique)
+        // ========================================
+
+        incrementNotificationBadge() {
+            this.elements.notificationBadge.textContent = '1';
+            this.elements.notificationBadge.style.display = 'flex';
+            this.elements.chatToggle.style.animation = 'pulse 0.6s ease-in-out 3';
+        }
+
+        resetNotificationBadge() {
+            this.elements.notificationBadge.textContent = '0';
+            this.elements.notificationBadge.style.display = 'none';
+            this.elements.chatToggle.style.animation = '';
+        }
+
+        // ========================================
+        // UTILITIES (identique)
+        // ========================================
+
+        setLoadingState(loading) {
+            this.isLoading = loading;
+            this.elements.chatInput.disabled = loading;
+            this.elements.sendButton.disabled = loading || !this.elements.chatInput.value.trim();
+
+            if (loading) {
+                this.elements.chatWidget.classList.add('loading');
+            } else {
+                this.elements.chatWidget.classList.remove('loading');
+            }
+        }
+
+        updateSendButton() {
+            const hasText = this.elements.chatInput.value.trim().length > 0;
+            this.elements.sendButton.disabled = !hasText || this.isLoading;
+        }
+
+        autoResize() {
+            const textarea = this.elements.chatInput;
+            textarea.style.height = 'auto';
+            let newHeight = Math.min(textarea.scrollHeight, 120);
+            newHeight = Math.max(newHeight, 46);
+            textarea.style.height = newHeight + 'px';
+        }
+
+        scrollToBottom() {
+            setTimeout(() => {
+                this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+            }, 100);
+        }
+
+        escapeHtml(text) {
+            if (typeof text !== 'string') return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ========================================
+        // DESTRUCTOR (identique)
+        // ========================================
+
+        destroy() {
+            this.stopPolling();
+            if (this.elements.chatWidget) {
+                this.elements.chatWidget.remove();
+            }
+        }
+    }
+
+    // ========================================
+    // AUTOMATIC INITIALIZATION (identique)
+    // ========================================
+
+    let luminaraChat = null;
+
+    function initializeChatWidget() {
+        if (!document.getElementById('luminara-chat-widget')) {
+            luminaraChat = new LuminaraChatWidget();
+            window.LuminaraChat = luminaraChat;
+            console.log('🚀 Luminara Chat Widget Initialized');
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeChatWidget);
+    } else {
+        setTimeout(initializeChatWidget, 1000);
+    }
+
+    window.initializeLuminaraChat = initializeChatWidget;
+
+})();
                 minimizeChat: document.getElementById('minimizeChat')
             };
         }
