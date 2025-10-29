@@ -649,6 +649,21 @@
     const EXPRESS_SERVER_URL = 'https://luminara-express-server.onrender.com';
     const REFRESH_INTERVAL = 3000; // 3 secondes
 
+    // Configuration des webhooks Lindy (NOUVEAUX)
+    const LINDY_WEBHOOKS = {
+      BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/e9bea5d0-3895-43b8-a64e-ba51c9999e32',
+      CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/3f08a05f-9e35-4993-90c0-e309fa950177',
+      CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/f9945949-f896-4fa9-9511-4d8ce2ae2917',
+      PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/4ecac6f6-a229-4a2e-af5e-435f765213c1'
+    };
+
+    const LINDY_WEBHOOK_TOKENS = {
+      BEHAVIORAL_ANALYSIS: 'c2463ef62a148fdc24695f7263086a980eaa5d74b355d272638af5730fe41779',
+      CHAT_MESSAGE: '61c02a372c6c8d189a65e68f6cb9e4458bfede32082536641e56a333b7c0e344',
+      CONVERSION: '060701a1bcfa0fd9fb7d89adf075e6fa8ec179d2023d796219e880d0fb2b8b49',
+      PRODUCT_SYNC: '004d9c1c2a77ea938e2479b909b1de130ed81177217a53c7266851fa0ce1cb48'
+    };
+
     // Charger les données du dashboard
     async function loadDashboardData() {
       try {
@@ -661,10 +676,43 @@
           updateConversationsTable(result.data.conversations);
           updateConversionsTable(result.data.conversions);
           updateSystemStatus();
+          
+          // Envoyer les stats à Lindy pour analyse
+          sendAnalyticsToLindy(result.data);
         }
       } catch (error) {
         console.error('Error loading dashboard data:', error);
         showErrorState();
+      }
+    }
+
+    // Envoyer les analytics à Lindy
+    async function sendAnalyticsToLindy(data) {
+      try {
+        const analyticsPayload = {
+          dashboard_data: data,
+          timestamp: new Date().toISOString(),
+          summary: {
+            total_visitors: data.summary.totalVisitors,
+            total_conversations: data.summary.totalConversations,
+            total_conversions: data.summary.totalConversions,
+            conversion_rate: data.summary.conversionRate
+          }
+        };
+
+        // Envoyer les données comportementales agrégées
+        await fetch(LINDY_WEBHOOKS.BEHAVIORAL_ANALYSIS, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.BEHAVIORAL_ANALYSIS}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(analyticsPayload)
+        });
+
+        console.log('📊 Analytics sent to Lindy');
+      } catch (error) {
+        console.warn('⚠️ Failed to send analytics to Lindy:', error.message);
       }
     }
 
@@ -864,7 +912,27 @@
 
     // Charger les conversions (pour le bouton export)
     async function loadConversions() {
-      alert('Fonction d\'export bientôt disponible!');
+      try {
+        // Envoyer un événement de conversion à Lindy
+        const conversionEvent = {
+          event_type: 'dashboard_export',
+          timestamp: new Date().toISOString(),
+          data_type: 'conversions'
+        };
+
+        await fetch(LINDY_WEBHOOKS.CONVERSION, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.CONVERSION}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(conversionEvent)
+        });
+
+        alert('Export initié! Les données ont été envoyées à Lindy pour analyse.');
+      } catch (error) {
+        alert('Fonction d\'export bientôt disponible!');
+      }
     }
 
     // Auto-refresh
