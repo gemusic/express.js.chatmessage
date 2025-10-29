@@ -336,59 +336,7 @@ app.post('/api/analytics/conversion', async (req, res) => {
   }
 });
 
-// [6] ENDPOINT: GENERATE PAYMENT LINK
-app.post('/api/generate-payment-link', async (req, res) => {
-  try {
-    const { visitor_id, product_id, product_name, price, description, image } = req.body;
-
-    console.log('💰 Generating payment link for:', visitor_id, product_name);
-
-    // Construire les données du panier
-    const cartData = [{
-      id: product_id,
-      name: product_name,
-      price: price,
-      quantity: 1,
-      color: 'Cosmic Black',
-      size: 'Standard'
-    }];
-
-    // Construire l'URL de paiement
-    const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true&visitor_id=${visitor_id}&product_added=true`;
-
-    // Stocker la session de paiement
-    if (!purchaseFlows[visitor_id]) {
-      purchaseFlows[visitor_id] = {};
-    }
-
-    purchaseFlows[visitor_id].current_payment = {
-      product_id: product_id,
-      product_name: product_name,
-      price: price,
-      payment_url: paymentUrl,
-      generated_at: new Date().toISOString()
-    };
-
-    res.json({
-      success: true,
-      payment_url: paymentUrl,
-      product: {
-        id: product_id,
-        name: product_name,
-        price: price,
-        description: description,
-        image: image
-      },
-      message: `🎉 **Excellent choice!** Your ${product_name} is ready. \n\n**Price:** $${price}\n\nClick the button below to proceed with secure payment.`
-    });
-
-  } catch (error) {
-    console.error('❌ Error generating payment link:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// [7] ENDPOINT: SEND PAYMENT LINK - AVEC AJOUT DIRECT AU PANIER
+// [6] ENDPOINT: SEND PAYMENT LINK - AVEC AJOUT DIRECT AU PANIER
 app.post('/api/send-payment-link', async (req, res) => {
   try {
     const { visitor_id, product_id, product_name, price, description } = req.body;
@@ -510,7 +458,7 @@ app.post('/api/send-payment-link', async (req, res) => {
   }
 });
 
-// [8] ENDPOINT: GET CART DATA (Pour récupérer le panier d'un visiteur)
+// [7] ENDPOINT: GET CART DATA (Pour récupérer le panier d'un visiteur)
 app.get('/api/cart/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
   
@@ -532,7 +480,7 @@ app.get('/api/cart/:visitor_id', (req, res) => {
   }
 });
 
-// [9] ENDPOINT: DASHBOARD ANALYTICS
+// [8] ENDPOINT: DASHBOARD ANALYTICS
 app.get('/api/dashboard/analytics', (req, res) => {
   try {
     const totalVisitors = Object.keys(visitorBehaviorData).length;
@@ -608,7 +556,7 @@ app.get('/api/dashboard/analytics', (req, res) => {
   }
 });
 
-// [10] ENDPOINT: GET VISITOR DATA
+// [9] ENDPOINT: GET VISITOR DATA
 app.get('/api/visitor-data/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
 
@@ -622,7 +570,7 @@ app.get('/api/visitor-data/:visitor_id', (req, res) => {
   });
 });
 
-// [11] ENDPOINT: INITIATE CHAT FLOW
+// [10] ENDPOINT: INITIATE CHAT FLOW
 app.post('/api/initiate-chat-flow', async (req, res) => {
   try {
     const { visitor_id, initial_context } = req.body;
@@ -715,7 +663,6 @@ app.get('/health', (req, res) => {
       visitor_message: 'POST /api/visitor-message',
       conversion: 'POST /api/analytics/conversion',
       payment_link: 'POST /api/send-payment-link',
-      generate_payment: 'POST /api/generate-payment-link',
       cart_data: 'GET /api/cart/:visitor_id',
       dashboard: 'GET /api/dashboard/analytics',
       visitor_data: 'GET /api/visitor-data/:visitor_id',
