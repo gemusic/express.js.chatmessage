@@ -1,37 +1,41 @@
+<script>
 // ========================================
-// LUMINARA ULTIMATE TRACKING SYSTEM V6.0
-// Parfaitement intégré avec le site Luminara
+// LUMINARA ULTIMATE TRACKING SYSTEM V7.0
+// ENVOI DIRECT À LINDY APRÈS 20 SECONDES - VERSION COMPLÈTE
 // ========================================
 
 (function() {
 'use strict';
 
-// Configuration
+// Configuration avec URL Lindy directe
 const CONFIG = {
-  SERVER_URL: 'https://luminara-express-server.onrender.com',
-  ACCUMULATION_TIME: 20000,
+  LINDY_WEBHOOK_URL: 'https://public.lindy.ai/api/v1/webhooks/lindy/e9bea5d0-3895-43b8-a64e-ba51c9999e32',
+  LINDY_TOKEN: 'c2463ef62a148fdc24695f7263086a980eaa5d74b355d272638af5730fe41779',
+  ACCUMULATION_TIME: 20000, // 20 SECONDES EXACTEMENT
   VISITOR_ID_KEY: 'luminara_visitor_id',
+  SESSION_ID_KEY: 'luminara_session_id',
   MAX_EVENTS: 500
 };
 
 class LuminaraTracker {
   constructor() {
-    this.visitorId = this.generateVisitorId();
-    this.sessionId = this.generateSessionId();
+    this.visitorId = this.generateUniqueVisitorId();
+    this.sessionId = this.generateUniqueSessionId();
     this.pageStartTime = Date.now();
     this.lastActivity = Date.now();
     this.events = [];
     this.hasSentData = false;
     this.isSending = false;
     this.trackingActive = true;
+    this.forceSendScheduled = false;
 
     this.accumulatedData = this.initializeDataStructure();
     
     this.init();
-    this.startShutdownTimer();
+    this.startGuaranteedSendTimer();
   }
 
-  generateVisitorId() {
+  generateUniqueVisitorId() {
     let visitorId = localStorage.getItem(CONFIG.VISITOR_ID_KEY);
     if (!visitorId) {
       visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 12);
@@ -40,8 +44,13 @@ class LuminaraTracker {
     return visitorId;
   }
 
-  generateSessionId() {
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  generateUniqueSessionId() {
+    let sessionId = sessionStorage.getItem(CONFIG.SESSION_ID_KEY);
+    if (!sessionId) {
+      sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      sessionStorage.setItem(CONFIG.SESSION_ID_KEY, sessionId);
+    }
+    return sessionId;
   }
 
   initializeDataStructure() {
@@ -53,8 +62,20 @@ class LuminaraTracker {
       referrer: document.referrer,
       start_time: this.pageStartTime,
 
-      device_info: this.getDeviceInfo(),
-      viewport: this.getViewportInfo(),
+      device_info: {
+        user_agent: navigator.userAgent,
+        language: navigator.language,
+        platform: navigator.platform,
+        screen_resolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        cookie_enabled: navigator.cookieEnabled
+      },
+
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        device_pixel_ratio: window.devicePixelRatio
+      },
 
       page_visits: [{
         url: window.location.href,
@@ -78,7 +99,6 @@ class LuminaraTracker {
       mouse_movements: [],
       mouse_clicks: [],
       
-      // Interactions e-commerce spécifiques à Luminara
       product_views: [],
       product_clicks: [],
       product_hovers: [],
@@ -87,73 +107,48 @@ class LuminaraTracker {
       checkout_attempts: [],
       product_interactions: [],
 
-      // Événements de navigation
       navigation_events: [],
       form_interactions: [],
 
       session_end_time: null,
-      data_sent: false
-    };
-  }
-
-  getDeviceInfo() {
-    return {
-      user_agent: navigator.userAgent,
-      language: navigator.language,
-      platform: navigator.platform,
-      screen_resolution: `${screen.width}x${screen.height}`,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-  }
-
-  getViewportInfo() {
-    return {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      device_pixel_ratio: window.devicePixelRatio
+      data_sent: false,
+      transmission_guaranteed: false
     };
   }
 
   init() {
     if (!this.trackingActive) return;
 
-    console.log('🎯 Luminara Tracking Activé - ID:', this.visitorId);
+    console.log('🎯 Luminara Tracking Activé - ID:', this.visitorId, 'Envoi direct à Lindy');
 
     this.trackNavigation();
     this.trackScrollBehavior();
     this.trackMouseInteractions();
     this.trackEcommerceInteractions();
     this.trackFormInteractions();
-    
-    this.startSingleSendTimer();
   }
 
-  startSingleSendTimer() {
+  startGuaranteedSendTimer() {
+    console.log('⏰ Timer 20s démarré - Envoi direct à Lindy pour:', this.visitorId);
+    
     setTimeout(() => {
-      if (this.trackingActive && !this.hasSentData) {
-        this.sendAccumulatedData();
+      if (this.trackingActive && !this.hasSentData && !this.forceSendScheduled) {
+        console.log('🕒 20 SECONDES ÉCOULÉES - Envoi DIRECT à Lindy pour:', this.visitorId);
+        this.forceSendScheduled = true;
+        this.sendDirectToLindy();
       }
     }, CONFIG.ACCUMULATION_TIME);
-  }
-
-  startShutdownTimer() {
-    setTimeout(() => {
-      this.trackingActive = false;
-      this.events = [];
-    }, CONFIG.ACCUMULATION_TIME + 5000);
   }
 
   trackNavigation() {
     if (!this.trackingActive) return;
 
-    // Pages visitées
     this.accumulatedData.navigation_events.push({
       type: 'page_view',
       url: window.location.href,
       timestamp: Date.now()
     });
 
-    // Liens cliqués
     document.addEventListener('click', (e) => {
       if (!this.trackingActive) return;
 
@@ -168,15 +163,16 @@ class LuminaraTracker {
       }
     });
 
-    // Avant de quitter la page
     window.addEventListener('beforeunload', () => {
-      if (!this.hasSentData) {
+      if (!this.hasSentData && this.trackingActive) {
+        console.log('🚪 Utilisateur quitte - Envoi URGENT à Lindy pour:', this.visitorId);
         this.accumulatedData.exit_intent = {
           timestamp: Date.now(),
           scroll_depth: this.accumulatedData.scroll_behavior.depth_percentage,
-          time_on_page: Date.now() - this.pageStartTime
+          time_on_page: Date.now() - this.pageStartTime,
+          forced_send: true
         };
-        this.sendAccumulatedData();
+        this.sendDirectToLindy();
       }
     });
   }
@@ -229,7 +225,6 @@ class LuminaraTracker {
 
     let mouseMoveCount = 0;
 
-    // Mouvements de souris
     document.addEventListener('mousemove', (e) => {
       if (!this.trackingActive) return;
 
@@ -244,7 +239,6 @@ class LuminaraTracker {
       this.updateLastActivity();
     }, { passive: true });
 
-    // Clics
     document.addEventListener('click', (e) => {
       if (!this.trackingActive) return;
 
@@ -265,10 +259,10 @@ class LuminaraTracker {
   trackEcommerceInteractions() {
     if (!this.trackingActive) return;
 
-    // Vues de produits
-    this.trackProductViews();
+    setTimeout(() => {
+      this.trackInitialProductViews();
+    }, 1500);
 
-    // Clics sur produits
     document.addEventListener('click', (e) => {
       if (!this.trackingActive) return;
 
@@ -281,13 +275,9 @@ class LuminaraTracker {
             timestamp: Date.now(),
             click_position: { x: e.clientX, y: e.clientY }
           });
-
-          // Track conversion pour intérêt produit
-          this.trackConversion('product_interest', productInfo);
         }
       }
 
-      // Ajouts au panier Luminara
       if (e.target.closest('.add-to-cart, .add-to-cart-small, [data-action="add-to-cart"]')) {
         const productElement = this.findProductElement(e.target);
         const productInfo = productElement ? this.extractProductInfo(productElement) : null;
@@ -298,23 +288,16 @@ class LuminaraTracker {
           timestamp: Date.now(),
           element: this.getElementInfo(e.target)
         });
-
-        // Track conversion
-        this.trackConversion('add_to_cart', productInfo);
       }
 
-      // Checkout Luminara
       if (e.target.closest('.checkout-btn, .checkout-btn, .proceed-to-checkout')) {
         this.accumulatedData.checkout_attempts.push({
           action: 'checkout_attempt',
           timestamp: Date.now(),
           element: this.getElementInfo(e.target)
         });
-
-        this.trackConversion('checkout_attempt');
       }
 
-      // Interactions avec les cartes produits
       if (e.target.closest('.product-card, .recommendation-card')) {
         const productElement = e.target.closest('.product-card, .recommendation-card');
         const productInfo = this.extractProductInfo(productElement);
@@ -328,28 +311,22 @@ class LuminaraTracker {
       }
     });
 
-    // Hover sur produits
     this.trackProductHovers();
-
-    // Views de produits avec Intersection Observer
     this.trackProductVisibility();
   }
 
-  trackProductViews() {
-    // Track initial product views from page load
-    setTimeout(() => {
-      const productCards = document.querySelectorAll('.product-card, .recommendation-card');
-      productCards.forEach(card => {
-        const productInfo = this.extractProductInfo(card);
-        if (productInfo) {
-          this.accumulatedData.product_views.push({
-            ...productInfo,
-            timestamp: Date.now(),
-            view_type: 'initial'
-          });
-        }
-      });
-    }, 1000);
+  trackInitialProductViews() {
+    const productCards = document.querySelectorAll('.product-card, .recommendation-card');
+    productCards.forEach(card => {
+      const productInfo = this.extractProductInfo(card);
+      if (productInfo && !this.isProductAlreadyViewed(productInfo.id)) {
+        this.accumulatedData.product_views.push({
+          ...productInfo,
+          timestamp: Date.now(),
+          view_type: 'initial'
+        });
+      }
+    });
   }
 
   trackProductVisibility() {
@@ -373,7 +350,6 @@ class LuminaraTracker {
       });
     }, { threshold: [0.1, 0.8] });
 
-    // Observer tous les éléments produit Luminara
     setTimeout(() => {
       const productSelectors = '.product-card, [data-product-id], .item, .product, .recommendation-card';
       document.querySelectorAll(productSelectors).forEach(product => {
@@ -446,44 +422,22 @@ class LuminaraTracker {
     });
   }
 
-  trackConversion(eventType, productData = null) {
-    const conversionData = {
-      visitor_id: this.visitorId,
-      event_type: eventType,
-      product: productData,
-      timestamp: new Date().toISOString(),
-      page_url: window.location.href,
-      session_id: this.sessionId
-    };
-
-    // Envoyer la conversion au serveur
-    fetch(`${CONFIG.SERVER_URL}/api/analytics/conversion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(conversionData)
-    }).catch(error => console.error('Conversion tracking error:', error));
-  }
-
-  // Méthodes utilitaires spécifiques Luminara
   findProductElement(element) {
     return element.closest('.product-card, [data-product-id], .item, .product, .recommendation-card, .cart-item');
   }
 
   extractProductInfo(productElement) {
     try {
-      // Essayer différents sélecteurs Luminara
       const productId = productElement.getAttribute('data-product-id') ||
                        productElement.getAttribute('data-id') ||
                        productElement.querySelector('[data-product-id]')?.getAttribute('data-product-id') ||
                        'unknown';
 
-      // Nom du produit
       const productName = productElement.querySelector('.product-name, .item-name, [data-product-name], .name, h3, .item-name')?.textContent?.trim() ||
                          productElement.getAttribute('data-product-name') ||
                          productElement.querySelector('h3, h4')?.textContent?.trim() ||
                          'Produit Luminara';
 
-      // Prix du produit
       const productPrice = productElement.querySelector('.product-price, .item-price, .price, [data-price], .recommendation-price')?.textContent?.trim() ||
                           productElement.getAttribute('data-price') ||
                           productElement.querySelector('.price')?.textContent?.trim() ||
@@ -535,61 +489,102 @@ class LuminaraTracker {
     this.lastActivity = Date.now();
   }
 
-  sendAccumulatedData() {
+  sendDirectToLindy() {
     if (this.isSending || this.hasSentData) {
-      console.log('⏭️ Data already sent - skipping');
+      console.log('⏭️ Données déjà envoyées à Lindy - Ignoré pour:', this.visitorId);
       return;
     }
     
     this.isSending = true;
-    this.hasSentData = true;
 
-    // Calculs finaux
     const currentTime = Date.now();
     this.accumulatedData.time_tracking.total_time = currentTime - this.pageStartTime;
     this.accumulatedData.session_end_time = currentTime;
     this.accumulatedData.data_sent = true;
+    this.accumulatedData.transmission_guaranteed = true;
+    this.accumulatedData.transmission_type = this.forceSendScheduled ? 'auto_20s_direct' : 'manual_direct';
 
     const payload = {
       ...this.accumulatedData,
       transmission_timestamp: new Date().toISOString(),
-      tracking_version: 'v6.0-luminara-optimized'
+      tracking_version: 'v7.0-direct-to-lindy',
+      visitor_country: this.getVisitorCountry(),
+      page_load_time: this.getPageLoadTime(),
+      lindy_integration: true,
+      source: 'luminara_direct_tracking'
     };
 
-    console.log('📤 Sending Luminara tracking data for:', this.visitorId);
-    console.log('📊 Summary:', {
-      products_viewed: payload.product_views.length,
-      cart_actions: payload.add_to_cart_events.length,
-      scroll_depth: payload.scroll_behavior.depth_percentage + '%'
+    console.log('📤 ENVOI DIRECT À LINDY pour:', this.visitorId);
+    console.log('🔗 URL Lindy:', CONFIG.LINDY_WEBHOOK_URL);
+    console.log('📊 Données envoyées:', {
+      durée: Math.round((currentTime - this.pageStartTime) / 1000) + 's',
+      produits_vus: payload.product_views.length,
+      actions_panier: payload.add_to_cart_events.length,
+      profondeur_scroll: payload.scroll_behavior.depth_percentage + '%'
     });
 
-    // Envoyer au serveur Luminara
-    fetch(`${CONFIG.SERVER_URL}/api/behavioral-data`, {
+    this.sendToLindyWebhook(payload);
+  }
+
+  sendToLindyWebhook(payload) {
+    fetch(CONFIG.LINDY_WEBHOOK_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.LINDY_TOKEN}`
+      },
       body: JSON.stringify(payload)
     })
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error('HTTP error ' + response.status);
+      return response.json();
+    })
     .then(data => {
-      if (data.success) {
-        console.log('✅ Luminara tracking data sent successfully');
-        this.trackingActive = false;
-        this.events = [];
-      }
+      console.log('✅ DONNÉES ENVOYÉES DIRECTEMENT À LINDY pour:', this.visitorId);
+      this.hasSentData = true;
+      this.trackingActive = false;
+      this.events = [];
     })
     .catch(error => {
-      console.error('❌ Error sending Luminara tracking data:', error);
-      this.hasSentData = true;
+      console.error('❌ Erreur envoi direct à Lindy:', error);
+      this.retryLindySend(payload);
     })
     .finally(() => {
       this.isSending = false;
     });
   }
 
-  // API publique pour intégration
+  retryLindySend(payload, attempt = 1) {
+    if (attempt > 3) {
+      console.error('💥 Échec après 3 tentatives vers Lindy pour:', this.visitorId);
+      return;
+    }
+
+    setTimeout(() => {
+      console.log(`🔄 Tentative ${attempt} vers Lindy pour:`, this.visitorId);
+      this.sendToLindyWebhook(payload);
+    }, attempt * 2000);
+  }
+
+  getVisitorCountry() {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch (e) {
+      return 'unknown';
+    }
+  }
+
+  getPageLoadTime() {
+    if (window.performance && window.performance.timing) {
+      return window.performance.timing.loadEventEnd - window.performance.timing.navigationStart;
+    }
+    return null;
+  }
+
   forceSendData() {
     if (!this.hasSentData && this.trackingActive) {
-      this.sendAccumulatedData();
+      console.log('🚨 Envoi forcé manuellement à Lindy pour:', this.visitorId);
+      this.sendDirectToLindy();
     }
   }
 
@@ -603,41 +598,31 @@ class LuminaraTracker {
       sent: this.hasSentData,
       duration: Date.now() - this.pageStartTime,
       visitorId: this.visitorId,
-      productsTracked: this.accumulatedData.product_views.length
+      sessionId: this.sessionId,
+      productsTracked: this.accumulatedData.product_views.length,
+      transmission_guaranteed: this.forceSendScheduled,
+      destination: 'LINDY_DIRECT'
     };
-  }
-
-  // Méthode pour track des événements custom
-  trackCustomEvent(eventType, eventData) {
-    if (!this.trackingActive) return;
-
-    this.events.push({
-      type: eventType,
-      data: eventData,
-      timestamp: Date.now()
-    });
   }
 }
 
 // Initialisation
-console.log('🚀 Initializing Luminara Tracking V6 - Ecommerce Optimized');
+console.log('🚀 Initialisation Luminara Tracking V7 - Envoi Direct à Lindy');
 window.LuminaraTracker = new LuminaraTracker();
 
-// API globale pour intégration
 window.LuminaraTracking = {
   getVisitorId: () => window.LuminaraTracker?.getVisitorId(),
   getStatus: () => window.LuminaraTracker?.getTrackingStatus(),
-  forceSend: () => window.LuminaraTracker?.forceSendData(),
-  trackEvent: (type, data) => window.LuminaraTracker?.trackCustomEvent(type, data)
+  forceSend: () => window.LuminaraTracker?.forceSendData()
 };
 
-// Auto-start when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('🏪 Luminara Tracking initialized on Luminara e-commerce site');
+    console.log('🏪 Luminara Tracking V7 initialisé - Envoi direct à Lindy');
   });
 } else {
-  console.log('🏪 Luminara Tracking initialized on Luminara e-commerce site');
+  console.log('🏪 Luminara Tracking V7 initialisé - Envoi direct à Lindy');
 }
 
 })();
+</script>
