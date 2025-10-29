@@ -1,27 +1,21 @@
 {
   "name": "luminara-express-server",
-  "version": "2.0.0",
-  "description": "Serveur complet Luminara AI avec tracking, chatbot et dashboard",
+  "version": "1.0.0",
+  "description": "Luminara E-commerce AI Sales Agent System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "deploy": "npm start"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "axios": "^1.6.0"
   },
-  "engines": {
-    "node": ">=16.0.0"
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   },
-  "keywords": [
-    "luminara",
-    "ai",
-    "ecommerce",
-    "tracking",
-    "chatbot",
-    "analytics"
-  ]
+  "keywords": ["ecommerce", "ai", "chatbot", "payment", "lindy"],
+  "author": "Luminara",
+  "license": "MIT"
 }
