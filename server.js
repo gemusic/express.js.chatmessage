@@ -11,20 +11,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================
-// CONFIGURATION LINDY - WEBHOOKS
+// CONFIGURATION LINDY - WEBHOOKS (NOUVEAUX)
 // ============================================
 const LINDY_WEBHOOKS = {
-  BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/a77d3f14-2ae7-4dd6-9862-16a0bcbc182b',
-  CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/b37b9919-cd88-44d0-8d7c-a6b9c1f2975a',
-  CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/a52e8822-76f6-4775-bab2-c523d49568b5',
-  PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/fa1b7f8e-7d6b-4740-9e26-e9180ffe303d'
+  BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/e9bea5d0-3895-43b8-a64e-ba51c9999e32',
+  CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/3f08a05f-9e35-4993-90c0-e309fa950177',
+  CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/f9945949-f896-4fa9-9511-4d8ce2ae2917',
+  PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/4ecac6f6-a229-4a2e-af5e-435f765213c1'
 };
 
 const LINDY_WEBHOOK_TOKENS = {
-  BEHAVIORAL_ANALYSIS: 'b485b30708af35cacf531464d3958c0f2e571dfba26d142a4a595a53e851acc1',
-  CHAT_MESSAGE: 'ccfc2755eedd30d02f4ec096517c06e95cc25e5ad4afe8de4f53ee1d3d30299a',
-  CONVERSION: 'd004737d70efaaab01d8984a41a0248f89e747fa638c371f061a5847c760c0c0',
-  PRODUCT_SYNC: '5a86dedf6795e9c45e637de3fb02c3e1a3a1d813c27e919c33808a3fba2c3f12'
+  BEHAVIORAL_ANALYSIS: 'c2463ef62a148fdc24695f7263086a980eaa5d74b355d272638af5730fe41779',
+  CHAT_MESSAGE: '61c02a372c6c8d189a65e68f6cb9e4458bfede32082536641e56a333b7c0e344',
+  CONVERSION: '060701a1bcfa0fd9fb7d89adf075e6fa8ec179d2023d796219e880d0fb2b8b49',
+  PRODUCT_SYNC: '004d9c1c2a77ea938e2479b909b1de130ed81177217a53c7266851fa0ce1cb48'
 };
 
 // ============================================
