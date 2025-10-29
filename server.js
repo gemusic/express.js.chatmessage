@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================
-// CONFIGURATION LINDY - WEBHOOKS (NOUVEAUX)
+// CONFIGURATION LINDY - WEBHOOKS
 // ============================================
 const LINDY_WEBHOOKS = {
   BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/e9bea5d0-3895-43b8-a64e-ba51c9999e32',
@@ -386,70 +386,85 @@ app.post('/api/generate-payment-link', async (req, res) => {
   }
 });
 
-// [7] ENDPOINT: SEND PAYMENT LINK - CORRIGÉ ET OPTIMISÉ
+// [7] ENDPOINT: SEND PAYMENT LINK - VERSION COMPLÈTE AVEC INTÉGRATION PANIER
 app.post('/api/send-payment-link', async (req, res) => {
   try {
-    const { visitor_id, product_id, product_name, price, description } = req.body;
+    const { visitor_id, product_id, product_name, price, description, image } = req.body;
 
-    console.log('💰 Sending payment link for:', visitor_id, product_name);
+    console.log('💰 Processing payment link for:', visitor_id, product_name);
 
-    // Trouver le produit dans la base de données pour obtenir l'image complète
+    // 1. TROUVER LE PRODUIT DANS LA BASE
     const product = allProducts.find(p => p.id == product_id) || {
-      id: product_id || `p_${Date.now()}`,
+      id: product_id,
       name: product_name,
       price: price,
       description: description,
-      image: `${product_name.toLowerCase().replace(/\s+/g, '-')}.jpeg`
+      image: image || `${product_name.toLowerCase().replace(/\s+/g, '-')}.jpeg`,
+      category: 'featured'
     };
 
-    // Construire les données du panier
-    const cartData = [{
+    // 2. CORRIGER L'URL DE L'IMAGE SI NÉCESSAIRE
+    let productImage = product.image;
+    if (productImage && !productImage.startsWith('http')) {
+      productImage = `https://ebusinessag.com/${productImage}`;
+    }
+
+    // 3. CRÉER LES DONNÉES DU PANIER
+    const cartItem = {
       id: product.id,
       name: product.name,
       price: product.price,
       quantity: 1,
-      image: product.image
-    }];
+      image: productImage,
+      color: 'Cosmic Black',
+      size: 'Standard'
+    };
 
-    // Construire l'URL de paiement
-    const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true`;
+    const cartData = [cartItem];
 
-    // Stocker comme message de chat avec produit de paiement
+    // 4. GÉNÉRER LE LIEN DE PAIEMENT AVEC DONNÉES ENCODÉES
+    const encodedCart = encodeURIComponent(JSON.stringify(cartData));
+    const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodedCart}&checkout=true&visitor_id=${visitor_id}`;
+
+    // 5. PRÉPARER LES DONNÉES POUR LE FRONTEND
     const productInfo = {
       id: product.id,
       name: product.name,
       price: product.price,
       description: product.description,
-      image: product.image
+      image: productImage,
+      category: product.category
     };
 
+    // 6. STOCKER COMME MESSAGE AVEC PRODUIT DE PAIEMENT
     chatResponses[visitor_id] = {
-      message: `🎉 **Excellent choice!** Your ${product.name} is ready. \n\n**Price:** $${product.price}\n\nClick the button below to proceed with secure payment.`,
+      message: `🎉 **Excellent choice!** Your **${product.name}** is ready!\n\n**Price:** $${product.price}\n**Description:** ${product.description}\n\nClick the secure payment button below to complete your order!`,
       payment_product: productInfo,
       timestamp: new Date().toISOString(),
       read: false,
       message_type: 'payment_link'
     };
 
-    // Ajouter à l'historique
+    // 7. AJOUTER À L'HISTORIQUE DE CONVERSATION
     if (!conversationHistory[visitor_id]) {
       conversationHistory[visitor_id] = [];
     }
 
     conversationHistory[visitor_id].push({
       role: 'assistant',
-      message: `🎉 **Excellent choice!** Your ${product.name} is ready. \n\n**Price:** $${product.price}\n\nClick the button below to proceed with secure payment.`,
+      message: `🎉 **Excellent choice!** Your **${product.name}** is ready!\n\n**Price:** $${product.price}\n**Description:** ${product.description}\n\nClick the secure payment button below to complete your order!`,
       payment_product: productInfo,
       timestamp: new Date().toISOString(),
       message_type: 'payment_link'
     });
 
-    // Track conversion via Lindy webhook
+    // 8. TRACKER LA CONVERSION
     try {
       await axios.post(LINDY_WEBHOOKS.CONVERSION, {
         visitor_id: visitor_id,
         event_type: 'payment_link_sent',
         product: productInfo,
+        payment_url: paymentUrl,
         timestamp: new Date().toISOString()
       }, {
         headers: { 
@@ -458,20 +473,31 @@ app.post('/api/send-payment-link', async (req, res) => {
         }
       });
     } catch (webhookErr) {
-      console.warn('⚠️ Lindy conversion webhook failed (non-fatal):', webhookErr.message);
+      console.warn('⚠️ Lindy conversion webhook failed:', webhookErr.message);
     }
 
+    // 9. RÉPONSE FINALE AVEC TOUTES LES DONNÉES
     res.json({
       success: true,
-      message: 'Payment link sent successfully',
+      message: 'Payment link generated successfully',
       visitor_id: visitor_id,
-      payment_url: paymentUrl,
-      product: productInfo
+      payment_data: {
+        product: productInfo,
+        payment_url: paymentUrl,
+        cart_data: cartData
+      },
+      frontend_message: `🎉 **Excellent choice!** Your **${product.name}** is ready!\n\n**Price:** $${product.price}\n**Description:** ${product.description}\n\nClick the secure payment button below to complete your order!`
     });
 
+    console.log(`✅ Payment link generated for ${visitor_id}: ${product.name} - $${product.price}`);
+
   } catch (error) {
-    console.error('❌ Error sending payment link:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error generating payment link:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: 'Failed to generate payment link'
+    });
   }
 });
 
@@ -674,4 +700,6 @@ app.listen(PORT, () => {
   console.log(`📈 Tracking: http://localhost:${PORT}/tracking.js`);
   console.log(`🤖 Chatbot: http://localhost:${PORT}/chatbot-widget.js`);
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
+  console.log(`🛒 Payment Links: Ready to generate!`);
+  console.log(`🔗 Example: https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=[PRODUCT_DATA]&checkout=true`);
 });
