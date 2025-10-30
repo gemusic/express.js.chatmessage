@@ -1,4 +1,3 @@
-<script>
 // ========================================
 // LUMINARA ULTIMATE TRACKING SYSTEM V7.0
 // ENVOI DIRECT À LINDY APRÈS 20 SECONDES - VERSION COMPLÈTE
@@ -625,4 +624,3 @@ if (document.readyState === 'loading') {
 }
 
 })();
-</script>
