@@ -1,5 +1,5 @@
 // ============================================
-// LUMINARA EXPRESS SERVER - SYSTÈME COMPLET AVEC PAIEMENTS
+// LUMINARA EXPRESS SERVER - SYSTÈME COMPLET AVEC 50 PRODUITS
 // ============================================
 
 const express = require('express');
@@ -38,6 +38,27 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+// ============================================
+// FONCTION POUR CORRIGER LES URLS D'IMAGES
+// ============================================
+function fixProductImageUrl(product) {
+  if (!product.image) {
+    const imageName = product.name.toLowerCase().replace(/\s+/g, '-') + '.jpeg';
+    return `https://ebusinessag.com/${imageName}`;
+  }
+  
+  if (product.image.startsWith('http')) {
+    return product.image;
+  }
+  
+  if (product.image.includes('...') || product.image === 'https://...') {
+    const imageName = product.name.toLowerCase().replace(/\s+/g, '-') + '.jpeg';
+    return `https://ebusinessag.com/${imageName}`;
+  }
+  
+  return `https://ebusinessag.com/${product.image}`;
+}
 
 // ============================================
 // BASE DE DONNÉES PRODUITS COMPLÈTE (50 PRODUITS)
@@ -95,6 +116,11 @@ const allProducts = [
   { id: 50, name: "Echo Wireless Charger Pad", price: 49, category: "accessory", description: "Fast wireless charging with intelligent cooling fan and foreign object detection. Charges through cases up to 5mm thick with premium finish.", image: "echo-wireless-charger-pad.jpeg" }
 ];
 
+// Corriger toutes les URLs d'images dans la base de données
+allProducts.forEach(product => {
+  product.image = fixProductImageUrl(product);
+});
+
 // ============================================
 // STOCKAGE DES DONNÉES (EN MÉMOIRE)
 // ============================================
@@ -112,25 +138,16 @@ const analyticsData = {
 };
 
 // ============================================
-// ENDPOINTS PRINCIPAUX - FLOW COMPLET
+// ENDPOINTS PRINCIPAUX - FLOW COMPLET CORRIGÉ
 // ============================================
 
-// [1] ENDPOINT: RECEIVE BEHAVIORAL DATA (Début du flow)
+// [1] ENDPOINT: RECEIVE BEHAVIORAL DATA
 app.post('/api/behavioral-data', async (req, res) => {
   try {
     const behavioralData = req.body;
     const visitorId = behavioralData.visitor_id;
 
     console.log('📊 Received behavioral data for:', visitorId);
-
-    // Déduplication
-    if (processedVisitors[visitorId]) {
-      return res.json({
-        success: true,
-        message: 'Visitor already processed',
-        duplicate: true
-      });
-    }
 
     // Stocker les données
     visitorBehaviorData[visitorId] = {
@@ -141,7 +158,7 @@ app.post('/api/behavioral-data', async (req, res) => {
 
     processedVisitors[visitorId] = new Date().toISOString();
 
-    // Envoyer à Lindy AI pour analyse comportementale
+    // Envoyer à Lindy AI
     await axios.post(LINDY_WEBHOOKS.BEHAVIORAL_ANALYSIS, behavioralData, {
       headers: { 
         'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.BEHAVIORAL_ANALYSIS}`,
@@ -165,47 +182,23 @@ app.post('/api/behavioral-data', async (req, res) => {
   }
 });
 
-// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI) - CORRIGÉ POUR LES IMAGES MANQUANTES
+// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI) - VERSION CORRIGÉE
 app.post('/api/send-chat-message', (req, res) => {
   try {
     const { visitor_id, message, techniques_used, recommended_products, confidence_score, message_type, payment_product } = req.body;
 
     console.log(`🤖 AI Chat message for ${visitor_id}:`, message);
-    console.log('📦 Payment product RAW:', payment_product);
+    console.log('📦 Payment product received:', payment_product);
 
-    // ✅ CORRECTION URGENTE : Lindy envoie "https://..." comme placeholder
+    // ✅ CORRECTION CRITIQUE : Réparer l'URL de l'image du produit
     let correctedPaymentProduct = null;
     if (payment_product) {
       correctedPaymentProduct = { ...payment_product };
       
-      // 🔥 CORRECTION CRITIQUE : Si l'image est un placeholder, on la remplace
-      if (correctedPaymentProduct.image === 'https://...' || 
-          !correctedPaymentProduct.image || 
-          correctedPaymentProduct.image.includes('...')) {
-        
-        console.log('🔄 Fixing placeholder image for product:', correctedPaymentProduct.name);
-        
-        // Trouver le produit dans notre base de données
-        const productFromDb = allProducts.find(p => p.id == correctedPaymentProduct.id);
-        
-        if (productFromDb) {
-          // Utiliser la vraie image du produit
-          correctedPaymentProduct.image = `https://ebusinessag.com/${productFromDb.image}`;
-          console.log('✅ Fixed image URL:', correctedPaymentProduct.image);
-        } else {
-          // Fallback basé sur le nom du produit
-          const imageName = correctedPaymentProduct.name.toLowerCase().replace(/\s+/g, '-') + '.jpeg';
-          correctedPaymentProduct.image = `https://ebusinessag.com/${imageName}`;
-          console.log('🔄 Using fallback image:', correctedPaymentProduct.image);
-        }
-      }
+      // CORRIGER L'URL DE L'IMAGE
+      correctedPaymentProduct.image = fixProductImageUrl(correctedPaymentProduct);
       
-      // S'assurer que l'image a toujours une URL valide
-      if (!correctedPaymentProduct.image.startsWith('http')) {
-        correctedPaymentProduct.image = `https://ebusinessag.com/${correctedPaymentProduct.image}`;
-      }
-
-      console.log('✅ Final payment product:', correctedPaymentProduct);
+      console.log('✅ Fixed product image URL:', correctedPaymentProduct.image);
     }
 
     // Stocker la réponse AI
@@ -247,7 +240,7 @@ app.post('/api/send-chat-message', (req, res) => {
   }
 });
 
-// [3] ENDPOINT: GET CHAT RESPONSE (For Frontend) - OPTIMISÉ POUR L'AFFICHAGE DES CARTES DE PAIEMENT
+// [3] ENDPOINT: GET CHAT RESPONSE (For Frontend) - VERSION CORRIGÉE
 app.get('/api/chat-response/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
 
@@ -255,15 +248,13 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
     const response = chatResponses[visitor_id];
     chatResponses[visitor_id].read = true;
 
-    // Si un produit de paiement est associé, générer un lien de paiement
+    // ✅ CORRECTION : Générer le lien de paiement avec URL d'image corrigée
     let payment_data = null;
     if (response.payment_product) {
       const product = { ...response.payment_product };
 
-      // S'assurer que l'image a le bon chemin
-      if (product.image && !product.image.startsWith('http')) {
-        product.image = `https://ebusinessag.com/${product.image}`;
-      }
+      // S'assurer que l'image est corrigée
+      product.image = fixProductImageUrl(product);
 
       const cartData = [{
         id: product.id,
@@ -271,14 +262,16 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
         price: product.price,
         quantity: 1,
         color: 'Cosmic Black',
-        size: 'Standard'
+        size: 'Standard',
+        image: product.image // ✅ URL CORRECTE
       }];
 
       const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true&visitor_id=${visitor_id}&product_added=true`;
 
       payment_data = {
         product: product,
-        payment_url: paymentUrl
+        payment_url: paymentUrl,
+        cart_data: cartData
       };
     }
 
@@ -289,7 +282,8 @@ app.get('/api/chat-response/:visitor_id', (req, res) => {
       recommended_products: response.recommended_products,
       confidence_score: response.confidence_score,
       timestamp: response.timestamp,
-      payment_data: payment_data
+      payment_data: payment_data,
+      message_type: response.message_type
     });
   } else {
     res.json({ success: true, message: null });
@@ -372,29 +366,30 @@ app.post('/api/analytics/conversion', async (req, res) => {
   }
 });
 
-// [6] ENDPOINT: SEND PAYMENT LINK - CORRIGÉ POUR LES IMAGES
+// [6] ENDPOINT: SEND PAYMENT LINK - VERSION CORRIGÉE
 app.post('/api/send-payment-link', async (req, res) => {
   try {
     const { visitor_id, product_id, product_name, price, description } = req.body;
 
-    console.log('💰 Adding product to cart and generating payment link for:', visitor_id, product_name);
+    console.log('💰 Adding product to cart for:', visitor_id, product_name);
 
-    // Trouver le produit complet avec URL d'image corrigée
-    const product = allProducts.find(p => p.id == product_id) || {
-      id: product_id,
-      name: product_name,
-      price: price,
-      description: description,
-      image: `${product_name.toLowerCase().replace(/\s+/g, '-')}.jpeg`,
-      category: 'accessory'
-    };
+    // Trouver le produit avec URL d'image corrigée
+    let product = allProducts.find(p => p.id == product_id);
+    if (!product) {
+      product = {
+        id: product_id,
+        name: product_name,
+        price: price,
+        description: description,
+        image: `${product_name.toLowerCase().replace(/\s+/g, '-')}.jpeg`,
+        category: 'accessory'
+      };
+    }
 
-    // ✅ CORRECTION URL IMAGE COMPLÈTE
-    const productImage = product.image.startsWith('http') 
-      ? product.image 
-      : `https://ebusinessag.com/${product.image}`;
+    // ✅ CORRECTION : Utiliser la fonction de correction d'URL
+    const productImage = fixProductImageUrl(product);
 
-    // CRÉER LES DONNÉES DU PANIER
+    // Créer les données du panier
     const cartItem = {
       id: product.id,
       name: product.name,
@@ -402,22 +397,22 @@ app.post('/api/send-payment-link', async (req, res) => {
       quantity: 1,
       color: 'Cosmic Black',
       size: 'Standard',
-      image: productImage // ← URL COMPLÈTE
+      image: productImage // ✅ URL CORRECTE
     };
 
     const cartData = [cartItem];
     const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true&visitor_id=${visitor_id}&product_added=true`;
 
-    // PRÉPARER LA RÉPONSE POUR LE CHATBOT
+    // Préparer la réponse pour le chatbot
     const productInfo = {
       id: product.id,
       name: product.name,
       price: product.price,
       description: product.description,
-      image: productImage // ← URL COMPLÈTE
+      image: productImage // ✅ URL CORRECTE
     };
 
-    // STOCKER COMME MESSAGE AVEC LIEN DE PAIEMENT
+    // Stocker comme message avec lien de paiement
     chatResponses[visitor_id] = {
       message: `🎉 **Excellent choice!** I've added **${product.name}** to your cart!\n\n**Price:** $${product.price}\n**Ready to checkout?** Click the button below to complete your purchase securely.`,
       payment_product: productInfo,
@@ -427,7 +422,7 @@ app.post('/api/send-payment-link', async (req, res) => {
       message_type: 'payment_link'
     };
 
-    // AJOUTER À L'HISTORIQUE DE CONVERSATION
+    // Ajouter à l'historique
     if (!conversationHistory[visitor_id]) {
       conversationHistory[visitor_id] = [];
     }
@@ -442,72 +437,36 @@ app.post('/api/send-payment-link', async (req, res) => {
       cart_data: cartData
     });
 
-    // TRACKER LA CONVERSION
-    try {
-      await axios.post(LINDY_WEBHOOKS.CONVERSION, {
-        visitor_id: visitor_id,
-        event_type: 'product_added_to_cart',
-        product: productInfo,
-        cart_data: cartData,
-        payment_url: paymentUrl,
-        timestamp: new Date().toISOString()
-      }, {
-        headers: { 
-          'Authorization': `Bearer ${LINDY_WEBHOOK_TOKENS.CONVERSION}`,
-          'Content-Type': 'application/json' 
-        }
-      });
-    } catch (webhookErr) {
-      console.warn('⚠️ Lindy conversion webhook failed:', webhookErr.message);
-    }
-
-    console.log('✅ Product added to cart and payment link generated:', {
-      visitor_id: visitor_id,
-      product: product.name,
-      cart_items: cartData.length,
-      payment_url: paymentUrl
-    });
+    console.log('✅ Product added to cart with CORRECT image URL:', productImage);
 
     res.json({
       success: true,
-      message: 'Product successfully added to cart and payment link generated',
+      message: 'Product successfully added to cart',
       visitor_id: visitor_id,
       payment_url: paymentUrl,
       product: productInfo,
-      cart_data: cartData,
-      action: 'cart_updated_and_redirect'
+      cart_data: cartData
     });
 
   } catch (error) {
     console.error('❌ Error adding product to cart:', error.message);
     res.status(500).json({ 
       success: false, 
-      error: error.message,
-      details: 'Failed to add product to cart and generate payment link'
+      error: error.message
     });
   }
 });
 
-// [7] ENDPOINT: GET CART DATA (Pour récupérer le panier d'un visiteur)
-app.get('/api/cart/:visitor_id', (req, res) => {
+// [7] ENDPOINT: GET CONVERSATION HISTORY
+app.get('/api/conversation/:visitor_id', (req, res) => {
   const { visitor_id } = req.params;
   
-  if (purchaseFlows[visitor_id] && purchaseFlows[visitor_id].cart) {
-    res.json({
-      success: true,
-      visitor_id: visitor_id,
-      cart: purchaseFlows[visitor_id].cart,
-      current_product: purchaseFlows[visitor_id].current_product,
-      payment_url: purchaseFlows[visitor_id].payment_url
-    });
-  } else {
-    res.json({
-      success: true,
-      visitor_id: visitor_id,
-      cart: [],
-      message: 'No cart data found for this visitor'
-    });
-  }
+  res.json({
+    success: true,
+    visitor_id: visitor_id,
+    conversation: conversationHistory[visitor_id] || [],
+    has_unread: !!(chatResponses[visitor_id] && !chatResponses[visitor_id].read)
+  });
 });
 
 // [8] ENDPOINT: DASHBOARD ANALYTICS
@@ -518,53 +477,6 @@ app.get('/api/dashboard/analytics', (req, res) => {
     const totalConversions = analyticsData.conversions.length;
     const conversionRate = totalVisitors > 0 ? ((totalConversions / totalVisitors) * 100).toFixed(2) : '0';
 
-    // Visiteurs récents
-    const recentVisitors = Object.values(visitorBehaviorData)
-      .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
-      .slice(0, 10)
-      .map(v => ({
-        visitor_id: v.visitor_id,
-        page_url: v.page_url,
-        time_on_page: v.time_tracking?.total_time ? Math.round(v.time_tracking.total_time / 1000) : 0,
-        scroll_depth: v.scroll_behavior?.depth_percentage || 0,
-        products_viewed: v.product_views?.length || 0,
-        flow_status: v.flow_status || 'unknown',
-        timestamp: v.received_at
-      }));
-
-    // Conversations récentes
-    const recentConversations = [];
-    Object.entries(conversationHistory).forEach(([visitor_id, messages]) => {
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        const userMessages = messages.filter(m => m.role === 'user');
-        const lastUserMessage = userMessages[userMessages.length - 1];
-
-        recentConversations.push({
-          visitor_id: visitor_id,
-          message_from_user: lastUserMessage?.message || 'N/A',
-          response_from_luminara: lastMessage.role === 'assistant' ? lastMessage.message : 'N/A',
-          techniques_used: lastMessage.techniques_used || [],
-          products_recommended: lastMessage.recommended_products || [],
-          timestamp: lastMessage.timestamp
-        });
-      }
-    });
-
-    recentConversations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    // Conversions récentes
-    const recentConversions = analyticsData.conversions
-      .sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at))
-      .slice(0, 10)
-      .map(c => ({
-        visitor_id: c.visitor_id,
-        product_purchased: c.product_name || 'Unknown Product',
-        price: c.price || '0',
-        revenue: c.revenue || c.price || '0',
-        timestamp: c.recorded_at
-      }));
-
     res.json({
       success: true,
       data: {
@@ -574,9 +486,14 @@ app.get('/api/dashboard/analytics', (req, res) => {
           totalConversions,
           conversionRate
         },
-        visitors: recentVisitors,
-        conversations: recentConversations.slice(0, 10),
-        conversions: recentConversions
+        recent_visitors: Object.values(visitorBehaviorData).slice(-10),
+        recent_conversations: Object.entries(conversationHistory)
+          .slice(-10)
+          .map(([visitor_id, messages]) => ({
+            visitor_id,
+            last_message: messages[messages.length - 1]?.message,
+            timestamp: messages[messages.length - 1]?.timestamp
+          }))
       }
     });
 
@@ -653,7 +570,7 @@ app.post('/api/initiate-chat-flow', async (req, res) => {
   }
 });
 
-// [13] ENDPOINT: FIX PAYMENT PRODUCT IMAGES
+// [11] ENDPOINT: FIX PAYMENT PRODUCT IMAGES
 app.post('/api/fix-payment-images', async (req, res) => {
   try {
     const { visitor_id, product_id } = req.body;
@@ -671,7 +588,7 @@ app.post('/api/fix-payment-images', async (req, res) => {
       name: product.name,
       price: product.price,
       description: product.description,
-      image: `https://ebusinessag.com/${product.image}` // ✅ URL RÉELLE
+      image: fixProductImageUrl(product) // ✅ URL RÉELLE
     };
 
     // Mettre à jour la réponse du chatbot
@@ -691,6 +608,15 @@ app.post('/api/fix-payment-images', async (req, res) => {
     console.error('❌ Error fixing payment images:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// [12] ENDPOINT: GET ALL PRODUCTS
+app.get('/api/products', (req, res) => {
+  res.json({
+    success: true,
+    products: allProducts,
+    total: allProducts.length
+  });
 });
 
 // ============================================
@@ -733,10 +659,11 @@ app.get('/health', (req, res) => {
       visitor_message: 'POST /api/visitor-message',
       conversion: 'POST /api/analytics/conversion',
       payment_link: 'POST /api/send-payment-link',
-      cart_data: 'GET /api/cart/:visitor_id',
+      conversation: 'GET /api/conversation/:visitor_id',
       dashboard: 'GET /api/dashboard/analytics',
       visitor_data: 'GET /api/visitor-data/:visitor_id',
-      initiate_chat: 'POST /api/initiate-chat-flow'
+      initiate_chat: 'POST /api/initiate-chat-flow',
+      products: 'GET /api/products'
     }
   });
 });
@@ -752,4 +679,5 @@ app.listen(PORT, () => {
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
   console.log(`🛒 Payment System: Ready with ${allProducts.length} products`);
   console.log(`🔗 Webhooks: Connected to Lindy AI`);
+  console.log(`🖼️  Image URLs: Automatically corrected to full paths`);
 });
