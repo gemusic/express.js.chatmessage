@@ -165,33 +165,50 @@ app.post('/api/behavioral-data', async (req, res) => {
   }
 });
 
-// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI) - CORRIGÉ POUR LES IMAGES
+// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI) - CORRIGÉ POUR LES IMAGES MANQUANTES
 app.post('/api/send-chat-message', (req, res) => {
   try {
     const { visitor_id, message, techniques_used, recommended_products, confidence_score, message_type, payment_product } = req.body;
 
     console.log(`🤖 AI Chat message for ${visitor_id}:`, message);
+    console.log('📦 Payment product RAW:', payment_product);
 
-    // ✅ CORRECTION DES URL D'IMAGES
+    // ✅ CORRECTION URGENTE : Lindy envoie "https://..." comme placeholder
     let correctedPaymentProduct = null;
     if (payment_product) {
       correctedPaymentProduct = { ...payment_product };
       
-      // S'assurer que l'image a une URL complète
-      if (correctedPaymentProduct.image && !correctedPaymentProduct.image.startsWith('http')) {
-        correctedPaymentProduct.image = `https://ebusinessag.com/${correctedPaymentProduct.image}`;
-      }
-      
-      // Si pas d'image, trouver l'image du produit dans la base
-      if (!correctedPaymentProduct.image || correctedPaymentProduct.image === 'https://ebusinessag.com/') {
+      // 🔥 CORRECTION CRITIQUE : Si l'image est un placeholder, on la remplace
+      if (correctedPaymentProduct.image === 'https://...' || 
+          !correctedPaymentProduct.image || 
+          correctedPaymentProduct.image.includes('...')) {
+        
+        console.log('🔄 Fixing placeholder image for product:', correctedPaymentProduct.name);
+        
+        // Trouver le produit dans notre base de données
         const productFromDb = allProducts.find(p => p.id == correctedPaymentProduct.id);
-        if (productFromDb && productFromDb.image) {
+        
+        if (productFromDb) {
+          // Utiliser la vraie image du produit
           correctedPaymentProduct.image = `https://ebusinessag.com/${productFromDb.image}`;
+          console.log('✅ Fixed image URL:', correctedPaymentProduct.image);
+        } else {
+          // Fallback basé sur le nom du produit
+          const imageName = correctedPaymentProduct.name.toLowerCase().replace(/\s+/g, '-') + '.jpeg';
+          correctedPaymentProduct.image = `https://ebusinessag.com/${imageName}`;
+          console.log('🔄 Using fallback image:', correctedPaymentProduct.image);
         }
       }
+      
+      // S'assurer que l'image a toujours une URL valide
+      if (!correctedPaymentProduct.image.startsWith('http')) {
+        correctedPaymentProduct.image = `https://ebusinessag.com/${correctedPaymentProduct.image}`;
+      }
+
+      console.log('✅ Final payment product:', correctedPaymentProduct);
     }
 
-    // Stocker la réponse AI avec l'image corrigée
+    // Stocker la réponse AI
     chatResponses[visitor_id] = {
       message: message,
       techniques_used: techniques_used || [],
@@ -200,7 +217,7 @@ app.post('/api/send-chat-message', (req, res) => {
       timestamp: new Date().toISOString(),
       read: false,
       message_type: message_type || 'response',
-      payment_product: correctedPaymentProduct // ← IMAGE CORRIGÉE
+      payment_product: correctedPaymentProduct
     };
 
     // Sauvegarder dans l'historique
@@ -215,7 +232,7 @@ app.post('/api/send-chat-message', (req, res) => {
       recommended_products: recommended_products,
       timestamp: new Date().toISOString(),
       message_type: message_type || 'response',
-      payment_product: correctedPaymentProduct // ← IMAGE CORRIGÉE
+      payment_product: correctedPaymentProduct
     });
 
     res.json({ 
@@ -632,6 +649,46 @@ app.post('/api/initiate-chat-flow', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error initiating chat flow:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// [13] ENDPOINT: FIX PAYMENT PRODUCT IMAGES
+app.post('/api/fix-payment-images', async (req, res) => {
+  try {
+    const { visitor_id, product_id } = req.body;
+
+    console.log('🔧 Fixing payment images for:', visitor_id, product_id);
+
+    // Trouver le produit réel
+    const product = allProducts.find(p => p.id == product_id);
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+
+    const productInfo = {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      description: product.description,
+      image: `https://ebusinessag.com/${product.image}` // ✅ URL RÉELLE
+    };
+
+    // Mettre à jour la réponse du chatbot
+    if (chatResponses[visitor_id]) {
+      chatResponses[visitor_id].payment_product = productInfo;
+      console.log('✅ Fixed payment product in chat responses');
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment product images fixed successfully',
+      product: productInfo,
+      fixed_image: productInfo.image
+    });
+
+  } catch (error) {
+    console.error('❌ Error fixing payment images:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
