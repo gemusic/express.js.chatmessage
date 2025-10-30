@@ -1,7 +1,7 @@
 {
   "name": "luminara-express-server",
   "version": "1.0.0",
-  "description": "Luminara E-commerce AI Sales Agent System",
+  "description": "Luminara AI Sales Agent System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,10 +12,7 @@
     "cors": "^2.8.5",
     "axios": "^1.6.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "keywords": ["ecommerce", "ai", "chatbot", "payment", "lindy"],
-  "author": "Luminara",
-  "license": "MIT"
+  "engines": {
+    "node": ">=14.0.0"
+  }
 }
