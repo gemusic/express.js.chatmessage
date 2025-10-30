@@ -165,14 +165,33 @@ app.post('/api/behavioral-data', async (req, res) => {
   }
 });
 
-// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI)
+// [2] ENDPOINT: SEND CHAT MESSAGE (From Lindy AI) - CORRIGÉ POUR LES IMAGES
 app.post('/api/send-chat-message', (req, res) => {
   try {
     const { visitor_id, message, techniques_used, recommended_products, confidence_score, message_type, payment_product } = req.body;
 
     console.log(`🤖 AI Chat message for ${visitor_id}:`, message);
 
-    // Stocker la réponse AI
+    // ✅ CORRECTION DES URL D'IMAGES
+    let correctedPaymentProduct = null;
+    if (payment_product) {
+      correctedPaymentProduct = { ...payment_product };
+      
+      // S'assurer que l'image a une URL complète
+      if (correctedPaymentProduct.image && !correctedPaymentProduct.image.startsWith('http')) {
+        correctedPaymentProduct.image = `https://ebusinessag.com/${correctedPaymentProduct.image}`;
+      }
+      
+      // Si pas d'image, trouver l'image du produit dans la base
+      if (!correctedPaymentProduct.image || correctedPaymentProduct.image === 'https://ebusinessag.com/') {
+        const productFromDb = allProducts.find(p => p.id == correctedPaymentProduct.id);
+        if (productFromDb && productFromDb.image) {
+          correctedPaymentProduct.image = `https://ebusinessag.com/${productFromDb.image}`;
+        }
+      }
+    }
+
+    // Stocker la réponse AI avec l'image corrigée
     chatResponses[visitor_id] = {
       message: message,
       techniques_used: techniques_used || [],
@@ -181,7 +200,7 @@ app.post('/api/send-chat-message', (req, res) => {
       timestamp: new Date().toISOString(),
       read: false,
       message_type: message_type || 'response',
-      payment_product: payment_product || null
+      payment_product: correctedPaymentProduct // ← IMAGE CORRIGÉE
     };
 
     // Sauvegarder dans l'historique
@@ -196,7 +215,7 @@ app.post('/api/send-chat-message', (req, res) => {
       recommended_products: recommended_products,
       timestamp: new Date().toISOString(),
       message_type: message_type || 'response',
-      payment_product: payment_product || null
+      payment_product: correctedPaymentProduct // ← IMAGE CORRIGÉE
     });
 
     res.json({ 
@@ -336,14 +355,14 @@ app.post('/api/analytics/conversion', async (req, res) => {
   }
 });
 
-// [6] ENDPOINT: SEND PAYMENT LINK - AVEC AJOUT DIRECT AU PANIER
+// [6] ENDPOINT: SEND PAYMENT LINK - CORRIGÉ POUR LES IMAGES
 app.post('/api/send-payment-link', async (req, res) => {
   try {
     const { visitor_id, product_id, product_name, price, description } = req.body;
 
     console.log('💰 Adding product to cart and generating payment link for:', visitor_id, product_name);
 
-    // Trouver le produit complet
+    // Trouver le produit complet avec URL d'image corrigée
     const product = allProducts.find(p => p.id == product_id) || {
       id: product_id,
       name: product_name,
@@ -353,30 +372,24 @@ app.post('/api/send-payment-link', async (req, res) => {
       category: 'accessory'
     };
 
-    // CRÉER LES DONNÉES DU PANIER AVEC LE PRODUIT DÉJÀ AJOUTÉ
+    // ✅ CORRECTION URL IMAGE COMPLÈTE
+    const productImage = product.image.startsWith('http') 
+      ? product.image 
+      : `https://ebusinessag.com/${product.image}`;
+
+    // CRÉER LES DONNÉES DU PANIER
     const cartItem = {
       id: product.id,
       name: product.name,
       price: product.price,
       quantity: 1,
       color: 'Cosmic Black',
-      size: 'Standard'
+      size: 'Standard',
+      image: productImage // ← URL COMPLÈTE
     };
 
-    // GÉNÉRER LE PANIER COMPLET
     const cartData = [cartItem];
-
-    // CRÉER L'URL DE PAIEMENT AVEC LE PANIER PRÉ-REMPLI
     const paymentUrl = `https://ebusinessag.com/ai_sales_agent_demo_cart.html?cart=${encodeURIComponent(JSON.stringify(cartData))}&checkout=true&visitor_id=${visitor_id}&product_added=true`;
-
-    // STOCKER LE PANIER DANS LA SESSION DU VISITEUR (pour backup)
-    if (!purchaseFlows[visitor_id]) {
-      purchaseFlows[visitor_id] = {};
-    }
-    
-    purchaseFlows[visitor_id].cart = cartData;
-    purchaseFlows[visitor_id].current_product = product;
-    purchaseFlows[visitor_id].payment_url = paymentUrl;
 
     // PRÉPARER LA RÉPONSE POUR LE CHATBOT
     const productInfo = {
@@ -384,7 +397,7 @@ app.post('/api/send-payment-link', async (req, res) => {
       name: product.name,
       price: product.price,
       description: product.description,
-      image: `https://ebusinessag.com/${product.image}`
+      image: productImage // ← URL COMPLÈTE
     };
 
     // STOCKER COMME MESSAGE AVEC LIEN DE PAIEMENT
