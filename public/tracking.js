@@ -7,10 +7,10 @@
 (function() {
 'use strict';
 
-// Configuration avec URL Lindy directe
+// Configuration avec URL Lindy directe (NOUVEAUX)
 const CONFIG = {
-  LINDY_WEBHOOK_URL: 'https://public.lindy.ai/api/v1/webhooks/lindy/fbef720c-ecf7-4b12-8e47-856180270d1a',
-  LINDY_TOKEN: 'f9c4be051301b028bfbfb3f780c2755211dbf787023bc9bf21b6bfea721d0728',
+  LINDY_WEBHOOK_URL: 'https://public.lindy.ai/api/v1/webhooks/lindy/6d043f16-eb07-4779-aa87-da5c66ece2bb',
+  LINDY_TOKEN: 'b0067e045ad28ab185a312ce0e4e7cdf0317b95cefe630e3da5baeef1d00a5b3',
   ACCUMULATION_TIME: 20000, // 20 SECONDES EXACTEMENT
   VISITOR_ID_KEY: 'luminara_visitor_id',
   SESSION_ID_KEY: 'luminara_session_id',
