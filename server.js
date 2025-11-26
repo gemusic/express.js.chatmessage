@@ -14,17 +14,17 @@ const PORT = process.env.PORT || 3000;
 // CONFIGURATION LINDY - WEBHOOKS (NOUVEAUX)
 // ============================================
 const LINDY_WEBHOOKS = {
-  BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/6d043f16-eb07-4779-aa87-da5c66ece2bb',
-  CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/5580dc79-30a1-44c6-af88-f1868db62043',
-  CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/73d103cf-afc7-4169-8fb9-7a85f2cdd3f0',
-  PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/a978882e-5053-41d4-982b-0c6f5dfb35b8'
+  BEHAVIORAL_ANALYSIS: 'https://public.lindy.ai/api/v1/webhooks/lindy/a1887dd0-6d22-48f6-8d78-70c1277c9e78',
+  CHAT_MESSAGE: 'https://public.lindy.ai/api/v1/webhooks/lindy/b27979b3-581a-4c58-a63f-ed83b8c6e12e',
+  CONVERSION: 'https://public.lindy.ai/api/v1/webhooks/lindy/b8cb2d34-25af-430a-a724-a8cd3c7a3f21',
+  PRODUCT_SYNC: 'https://public.lindy.ai/api/v1/webhooks/lindy/22ff292f-30db-45d4-8f88-046c41851b15'
 };
 
 const LINDY_WEBHOOK_TOKENS = {
-  BEHAVIORAL_ANALYSIS: 'b0067e045ad28ab185a312ce0e4e7cdf0317b95cefe630e3da5baeef1d00a5b3',
-  CHAT_MESSAGE: '5ec0c9948286c82a72aeab1a4168b0c70abd907a0cff70eb50c2ad2f977cc5f8',
-  CONVERSION: '75f57f1ba7049d837fe2edcf2bb1bb867df4c62e633a4f930d2f93eceeaf7c5e',
-  PRODUCT_SYNC: '9e5782c1eb4cc64e2f32dec055b565118246ebc0790a1ec3ba13bf5b1158ee4f'
+  BEHAVIORAL_ANALYSIS: '033dc608a3a479e1ce4e583342ff091ce3ca0592e36cac57e89a4a0eed5cf073',
+  CHAT_MESSAGE: '2b393f56ae1d69b6d199e8e16b7e7611e6efb2d0def3a9a3492b83034e93813c',
+  CONVERSION: '0648d1ce0d054c4b8f72bffe74a9810721046de3dbf41a94a21e0f3976c9768b',
+  PRODUCT_SYNC: '882c4cd19f2a2f758c54cec6f72e22de41d90d9732024d92ba010da97e70d088'
 };
 
 // ============================================
