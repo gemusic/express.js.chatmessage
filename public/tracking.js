@@ -9,8 +9,8 @@
 
 // Configuration avec URL Lindy directe (NOUVEAUX)
 const CONFIG = {
-  LINDY_WEBHOOK_URL: 'https://public.lindy.ai/api/v1/webhooks/lindy/6d043f16-eb07-4779-aa87-da5c66ece2bb',
-  LINDY_TOKEN: 'b0067e045ad28ab185a312ce0e4e7cdf0317b95cefe630e3da5baeef1d00a5b3',
+  LINDY_WEBHOOK_URL: 'https://public.lindy.ai/api/v1/webhooks/lindy/a1887dd0-6d22-48f6-8d78-70c1277c9e78',
+  LINDY_TOKEN: '033dc608a3a479e1ce4e583342ff091ce3ca0592e36cac57e89a4a0eed5cf073',
   ACCUMULATION_TIME: 20000, // 20 SECONDES EXACTEMENT
   VISITOR_ID_KEY: 'luminara_visitor_id',
   SESSION_ID_KEY: 'luminara_session_id',
